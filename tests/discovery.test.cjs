@@ -13,8 +13,8 @@ function environment(){
   const context={HTMLElement:Element,window:{},customElements:{get:k=>definitions.get(k),define:(k,v)=>definitions.set(k,v)},setTimeout:()=>0,clearTimeout(){},CustomEvent:class {constructor(type,options){this.type=type;Object.assign(this,options);}}};
   vm.createContext(context);
   const source=fs.readFileSync(path.join(__dirname,'../vaillant-app-card.js'),'utf8');
-  vm.runInContext(source.replace("  if(!customElements.get('vaillant-app-card'))","  window.testResolver=resolveEntities;\n  if(!customElements.get('vaillant-app-card'))"),context);
-  return {resolve:context.window.testResolver,Card:definitions.get('vaillant-app-card'),Editor:definitions.get('vaillant-app-card-editor')};
+  vm.runInContext(source.replace("  if(!customElements.get('vaillant-app-card'))","  window.testResolver=resolveEntities; window.testLanguage=getLanguage; window.testTranslate=translate;\n  if(!customElements.get('vaillant-app-card'))"),context);
+  return {language:context.window.testLanguage,translate:context.window.testTranslate,resolve:context.window.testResolver,Card:definitions.get('vaillant-app-card'),Editor:definitions.get('vaillant-app-card-editor')};
 }
 function fixture(system='example-system',entityPrefix='example'){
   const entities=[];
@@ -144,4 +144,26 @@ test('visual editor preserves existing entity mappings and optional settings',()
 test('invalid color in visual editor never emits a configuration change',()=>{
   const {Editor}=environment();const editor=new Editor();let changes=0;editor.dispatchEvent=()=>{changes++;return true;};editor.setConfig({type:'custom:vaillant-app-card'});
   editor._change({target:{dataset:{key:'accent_color'},value:'#fff;background:red'}});assert.equal(changes,0);assert.ok(editor._error);
+});
+
+test('language follows HA, supports explicit overrides and falls back to English',()=>{
+  const {language,translate,Card}=environment();
+  assert.equal(language({}, {locale:{language:'de-DE'}}),'de');
+  assert.equal(language({language:'en'}, {language:'de'}),'en');
+  assert.equal(language({language:'auto'}, {language:'fr'}),'en');
+  assert.equal(translate('Overview','de'),'Übersicht');
+  assert.equal(translate('Overview','en'),'Overview');
+  assert.equal(translate('Heating circuit 3','de'),'Heizkreis 3');
+  assert.equal(translate('Ground floor: Target temperature','de'),'Ground floor: Wunschtemperatur');
+  assert.equal(translate('sensor.example_room','de'),'sensor.example_room');
+  assert.throws(()=>new Card().setConfig({language:'fr'}));
+});
+
+test('editor language changes retain private mappings and custom names',()=>{
+  const {Editor}=environment(), editor=new Editor();let changed;
+  editor.setConfig({entities:{room:'sensor.example_room'},title:'Overview',zone:1});
+  editor.dispatchEvent=event=>{changed=event.detail.config;return true;};
+  editor._change({target:{dataset:{key:'language'},value:'de'}});
+  assert.equal(changed.language,'de');assert.equal(changed.title,'Overview');
+  assert.equal(changed.entities.room,'sensor.example_room');assert.equal(changed.zone,1);
 });

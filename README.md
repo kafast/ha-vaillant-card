@@ -1,224 +1,188 @@
 # Vaillant App Card
 
+**English** | [Deutsch](README.de.md)
+
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5?logo=homeassistant&logoColor=white)](#installation)
 [![Home Assistant Dashboard](https://img.shields.io/badge/Home_Assistant-Dashboard-18BCF2?logo=homeassistant&logoColor=white)](https://www.home-assistant.io/dashboards/)
 [![GitHub Issues](https://img.shields.io/github/issues/kafast/ha-vaillant-card)](https://github.com/kafast/ha-vaillant-card/issues)
 
-Steuere deine Vaillant-Heizung und dein Warmwasser direkt im Home-Assistant-Dashboard – mit einer anpassungsfähigen Oberfläche für **Smartphone, Tablet und Desktop**. Farben und Akzente orientieren sich an myVAILLANT; die Bedienung ist auf das Home-Assistant-Dashboard ausgelegt.
+Control your Vaillant heating and hot water from your Home Assistant dashboard, with layouts for **phones, tablets and desktops**. The card uses your Home Assistant theme by default and offers additional color schemes inspired by myVAILLANT.
 
-Die Karte erkennt passende Entitäten der [myVAILLANT-Integration](https://github.com/signalkraft/mypyllant-component) automatisch. Für den Einstieg genügt eine Zeile YAML. Weitere Custom Cards oder Themes sind nicht erforderlich.
+Entities from the [myVAILLANT integration](https://github.com/signalkraft/mypyllant-component) are discovered automatically. Start with one line of YAML; no additional custom cards or themes are required.
 
-**Zu Home Assistant hinzufügen**
+> [!WARNING]
+> **AI-generated / experimental:** This code was created and revised with generative AI. It has not been comprehensively tested or validated on a physical heating system. Automated checks with simulated data do not replace testing on real equipment.
+>
+> Controls send real commands. Verify entity assignments, readings and the effects of changes on your own system before relying on them. This card is not a safety monitoring system and must not be your only source of fault or frost-protection alerts. Back up your dashboard configuration before updating. This is an independent community project, without endorsement or support from Vaillant or the Home Assistant project.
 
-[![Zu Home Assistant hinzufügen](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=kafast&repository=ha-vaillant-card&category=plugin)
+**Add to Home Assistant**
 
-Öffnet das Repository in HACS deiner Home-Assistant-Instanz. HACS muss bereits eingerichtet sein; anschließend die Karte herunterladen.
+[![Add to Home Assistant](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=kafast&repository=ha-vaillant-card&category=plugin)
 
-> [!NOTE]
-> Eigenständiges Community-Projekt. Nicht von Vaillant entwickelt oder unterstützt. Die Karte ist eine Dashboard-Erweiterung und ersetzt nicht die myVAILLANT-Integration.
+Opens this repository in HACS on your Home Assistant instance. HACS must already be installed; download the card afterward. This dashboard card does not replace the myVAILLANT integration.
 
-![Desktop: Heizung und Warmwasser mit Schnellaktionen und Anlagendaten](docs/preview.jpg)
+![Desktop layout with heating, hot water, quick actions and system readings](docs/preview.jpg)
 
-*Desktop-Vorschau mit erfundenen Beispieldaten. Keine Verbindung zu einer echten Anlage.*
+*Screenshots use invented data and German UI labels. No physical heating system is connected. The card supports English and German.*
 
 <details>
-<summary>Tablet- und Smartphone-Vorschau</summary>
+<summary>Tablet and phone previews</summary>
 
-**Tablet:** Steuerbereiche nebeneinander, Schnellaktionen und Anlagendaten darunter.
+**Tablet:** Side-by-side controls, with quick actions and system readings below.
 
-![Tablet-Vorschau](docs/preview-tablet.jpg)
+![Tablet preview](docs/preview-tablet.jpg)
 
-**Smartphone:** Bedienelemente untereinander, Temperatursteuerung direkt in der Übersicht und erreichbare Navigation am unteren Rand.
+**Phone:** Stacked controls, inline temperature adjustments and bottom navigation.
 
-<img src="docs/preview-mobile.jpg" alt="Smartphone-Vorschau" width="390" />
+<img src="docs/preview-mobile.jpg" alt="Phone preview" width="390" />
 
 </details>
 
-## Inhalt
+## Features
 
-- [Funktionen](#funktionen)
-- [Voraussetzungen](#voraussetzungen)
-- [Installation](#installation)
-- [Schnellstart](#schnellstart)
-- [Layout auf Handy, Tablet und Desktop](#layout-auf-handy-tablet-und-desktop)
-- [Farbstile und Themes](#farbstile-und-themes)
-- [Konfiguration](#konfiguration)
-- [Automatische Zuordnung](#automatische-zuordnung)
-- [Bedienung und Grenzen](#bedienung-und-grenzen)
-- [Updates](#updates)
-- [Fehlerhilfe](#fehlerhilfe)
-- [Datenschutz](#datenschutz)
-- [Entwicklung und Support](#entwicklung-und-support)
-
-## Funktionen
-
-| Ansicht | Funktionen |
+| View | Features |
 | --- | --- |
-| **Übersicht** | Isttemperaturen, direkte Sollwertsteuerung für Heizung und Warmwasser, Schnellaktionen und ausgewählte Anlagendaten |
-| **Heizung** | Ist- und Solltemperatur, Betriebsart und Zugriff auf Zeitplanung, Heizkurve und Quick-Veto-Dauer |
-| **Warmwasser** | Speichertemperatur, Solltemperatur, Betriebsart und Warmwasser-Boost |
-| **Schnellzugriff** | Warmwasser schnell, Stoßlüften und Abwesenheitsmodus |
-| **Energie** | Elektrische Energie, Umweltertrag, erzeugte Wärme und Effizienz; Hydraulikstation separat |
-| **Anlage** | Erreichbarkeit, Störungsmeldungen, Anlagendaten und Hinweise zu fehlenden Entitäten |
+| Overview | Current temperatures, inline heating and hot-water setpoints, quick actions and selected readings |
+| Heating | Current and target temperature, operating mode, links to schedule, heating curve and Quick Veto duration |
+| Hot water | Tank temperature, setpoint, operating mode and hot-water boost |
+| Quick actions | Hot-water boost, ventilation boost and away mode |
+| Energy | Electrical consumption, environmental energy, generated heat and efficiency; hydraulic station shown separately |
+| System | Connectivity, faults, system readings and missing-entity information |
 
-- Automatische Zuordnung anhand der myVAILLANT-Registrierung, auch bei umbenannten Entitäts-IDs.
-- Auswahl bei mehreren Anlagen, Zonen, Warmwasserspeichern oder Energiegeräten.
-- Lokale YAML-Ausnahmen für einzelne Entitäten.
-- Layout nach verfügbarer Kartenbreite statt nach erkanntem Gerätetyp.
-- Fünf Farbstile: Home Assistant, Vaillant, Glas, Graphit und Ozean.
-- Automatischer Hell-/Dunkelmodus entsprechend Home Assistant.
-- Visueller Editor für Beschriftung, Farbstil und optionale Akzentfarben.
+- Registry-based discovery continues to work with renamed entity IDs.
+- Selection for multiple systems, zones, tanks or energy devices.
+- Local YAML overrides for individual entities.
+- Layout follows the available card width.
+- Five color schemes and automatic light/dark mode following Home Assistant.
+- Visual editor for labels, language, scheme and optional accent colors.
+- English and German UI, automatically selected from the Home Assistant language.
 
-## Voraussetzungen
+## Requirements
 
-- Home Assistant mit Dashboard-Unterstützung für Custom Cards.
-- Eingerichtete [myVAILLANT-Integration von signalkraft](https://github.com/signalkraft/mypyllant-component), Plattform `mypyllant`.
-- Aktivierte Entitäten für die gewünschten Funktionen: insbesondere `climate` für Heizung und `water_heater` für Warmwasser.
-- Für die automatische Zuordnung muss die HA-Sitzung die Entitätsregistrierung lesen können.
-- Optional: [HACS](https://www.hacs.dev/) für Installation und Updates.
+- Home Assistant with support for custom dashboard cards.
+- The configured [myVAILLANT integration by signalkraft](https://github.com/signalkraft/mypyllant-component), platform `mypyllant`.
+- Enabled entities for the required functions, particularly `climate` for heating and `water_heater` for hot water.
+- Access to the HA entity registry in the current session for automatic discovery.
+- Optional: [HACS](https://www.hacs.dev/) for installation and updates.
 
-Die verfügbaren Funktionen richten sich nach Anlage, Integration und aktivierten Entitäten. Eine verbindliche Mindestversion von Home Assistant ist noch nicht ermittelt; bisherige Prüfungen verwenden simulierte Anlagendaten.
+Available functions depend on your equipment, integration and enabled entities. A minimum supported HA version has not been established. Current validation uses simulated data.
 
 ## Installation
 
-### HACS – empfohlen
+### HACS (recommended)
 
-Das Repository wird als **benutzerdefiniertes Dashboard-Repository** hinzugefügt; es ist nicht im HACS-Standardkatalog gelistet.
+This is a **custom dashboard repository**, not a listing in the default HACS catalog.
 
-1. **HACS → ⋮ → Benutzerdefinierte Repositories** öffnen.
-2. Repository-URL eintragen:
+1. Open **HACS → ⋮ → Custom repositories**.
+2. Enter `https://github.com/kafast/ha-vaillant-card`.
+3. Select **Dashboard** and add the repository.
+4. Find **Vaillant App Card** in HACS and download it.
+5. Reload the Home Assistant frontend.
 
-   ```text
-   https://github.com/kafast/ha-vaillant-card
-   ```
-
-3. Typ **Dashboard** auswählen und hinzufügen.
-4. **Vaillant App Card** in HACS suchen und herunterladen.
-5. Das Home-Assistant-Frontend neu laden.
-
-HACS verwaltet die JavaScript-Ressource normalerweise selbst. Fehlt sie unter **Einstellungen → Dashboards → Ressourcen**, folgenden Eintrag als **JavaScript-Modul** ergänzen:
+HACS normally manages the resource automatically. If missing under **Settings → Dashboards → Resources**, add the following as a **JavaScript module**:
 
 ```text
 /hacsfiles/ha-vaillant-card/vaillant-app-card.js
 ```
 
-### Manuell
+### Manual installation
 
-1. [`vaillant-app-card.js`](https://raw.githubusercontent.com/kafast/ha-vaillant-card/main/vaillant-app-card.js) herunterladen.
-2. Datei nach `/config/www/vaillant-app-card.js` kopieren; den Ordner `www` bei Bedarf erstellen.
-3. Unter **Einstellungen → Dashboards → Ressourcen** hinzufügen:
+1. Download [`vaillant-app-card.js`](https://raw.githubusercontent.com/kafast/ha-vaillant-card/main/vaillant-app-card.js).
+2. Copy it to `/config/www/vaillant-app-card.js`; create `www` if needed.
+3. Under **Settings → Dashboards → Resources**, add `/local/vaillant-app-card.js?v=1.4.0` as a **JavaScript module**.
+4. Reload the frontend.
 
-   | Feld | Wert |
-   | --- | --- |
-   | URL | `/local/vaillant-app-card.js?v=1.3.1` |
-   | Ressourcentyp | JavaScript-Modul |
-
-4. Das Frontend neu laden.
-
-Fehlt der Menüpunkt **Ressourcen**, im Benutzerprofil den erweiterten Modus einschalten. Bei einem erstmals angelegten `www`-Ordner kann ein HA-Neustart erforderlich sein, wenn die Datei noch nicht erreichbar ist.
+Enable advanced mode in your user profile if Resources is hidden. A newly created `www` directory may require an HA restart before its files become accessible.
 
 <details>
-<summary>Ressourcen per YAML verwalten</summary>
+<summary>YAML-managed resources</summary>
 
-In die vorhandene Ressourcenliste eintragen:
+Add to the existing resource configuration:
 
 ```yaml
 lovelace:
   resources:
-    - url: /local/vaillant-app-card.js?v=1.3.1
+    - url: /local/vaillant-app-card.js?v=1.4.0
       type: module
 ```
 
-Einen vorhandenen `lovelace:`-Abschnitt nicht doppelt anlegen. Ressourcen entweder über die verwendete YAML-Konfiguration oder über die Oberfläche pflegen.
+Do not duplicate an existing `lovelace:` section. Manage resources through your chosen YAML setup or the UI.
 
 </details>
 
 > [!IMPORTANT]
-> Beim Wechsel zwischen manueller Installation und HACS den alten Ressourceneintrag entfernen. Die JavaScript-Datei nur einmal laden.
+> When switching between manual installation and HACS, remove the previous resource entry. Load the JavaScript file only once.
 
-## Schnellstart
+## Quick start
 
-Dashboard bearbeiten → **Karte hinzufügen → Manuell** und Folgendes einfügen:
+Edit your dashboard → **Add card → Manual**, then paste:
 
 ```yaml
 type: custom:vaillant-app-card
 ```
 
-Die Karte sucht nach passenden myVAILLANT-Entitäten. Gibt es mehrere mögliche Anlagen oder Zonen, erscheint eine Auswahl. Sollwerte lassen sich direkt in der Übersicht mit Plus/Minus ändern. **Betriebsart & Einstellungen** öffnet die jeweilige Detailansicht.
+The card searches for matching myVAILLANT entities. Multiple possible systems or zones produce a selection. Use plus/minus to adjust setpoints directly in the overview; **Mode & settings** opens the corresponding detail view.
 
-## Layout auf Handy, Tablet und Desktop
+## Phone, tablet and desktop layouts
 
-Die Karte richtet sich nach ihrem **tatsächlich verfügbaren Platz**. Ein schmaler Dashboard-Bereich verwendet auch am Desktop die kompakte Ansicht. Es gibt keine Geräteerkennung und keine getrennten mobilen Dashboards.
+The **available card width** determines the layout. A narrow desktop dashboard column still uses the compact layout.
 
-| Verfügbare Kartenbreite | Layout |
+| Card width | Layout |
 | --- | --- |
-| Unter 620 px | Steuerbereiche untereinander; große Plus-/Minus-Tasten, kompakte Schnellaktionen, zwei ausgewählte Anlagenwerte und Navigation am unteren Rand |
-| 620–1049 px | Heizung und Warmwasser nebeneinander; Schnellaktionen und Anlagendaten darunter; Navigation oben |
-| Ab 1050 px | Zwei Steuerbereiche mit seitlichen Schnellaktionen und Anlagendaten; mehrspaltige Energie- und Anlagenansichten |
+| Below 620 px | Stacked controls, large temperature buttons, compact quick actions, two system readings and bottom navigation |
+| 620–1049 px | Side-by-side heating and hot water, quick actions and readings below, top navigation |
+| 1050 px and above | Two controls with a sidebar for actions and readings; multi-column energy and system views |
 
-Auf breiteren Karten ist die Betriebsart direkt in der Übersicht erreichbar. Auf schmalen Karten wird sie über **Betriebsart & Einstellungen** geöffnet. Der Hell-/Dunkelmodus folgt dem von Home Assistant gemeldeten Modus.
+Operating modes are directly accessible in the wider overview. Narrow layouts expose them through **Mode & settings**. Light/dark mode follows the mode reported by HA.
 
-### Breite im Home-Assistant-Dashboard einstellen
-
-Die Karte kann den Platz nutzen, den ihr Home Assistant zuweist. In einer schmalen Abschnittsspalte bleibt sie entsprechend kompakt.
-
-- **Abschnitte:** Karte über den Layout-Dialog auf die volle Abschnittsbreite setzen. Für mehr Platz auch den Abschnitt selbst auf mehrere Spalten verbreitern.
-- **Eigene Wärmepumpenansicht:** Eine Panel-Ansicht stellt eine einzelne Karte über die verfügbare Breite dar.
-
-<details>
-<summary>Beispiel für eine eigene Panel-Ansicht</summary>
-
-Diesen Eintrag in die vorhandene Liste `views` des Dashboards aufnehmen:
+In a **Sections** dashboard, use the layout dialog to give the card the full section width, and widen the section for more room. A dedicated **Panel** view can give one card the available dashboard width:
 
 ```yaml
-- title: Wärmepumpe
-  path: waermepumpe
+# Add to the existing dashboard views list:
+- title: Heat pump
+  path: heat-pump
   type: panel
   cards:
     - type: custom:vaillant-app-card
 ```
 
-Das ist eine vollständige Ansicht, nicht der Inhalt einer einzelnen manuellen Karte. Bestehende Ansichten erhalten und den Eintrag ergänzen.
+This is a complete view entry, not the configuration of an individual manual card. Preserve existing views.
 
-</details>
+## Colors and themes
 
-## Farbstile und Themes
+![Five color schemes with example data](docs/color-schemes.jpg)
 
-![Vergleich der fünf Farbstile mit Beispieldaten](docs/color-schemes.jpg)
+Open **Edit card → Show visual editor → Color scheme**. Optional hex accent colors are also available there. Other configuration options remain available in YAML.
 
-**Karte bearbeiten → Visuellen Editor anzeigen → Farbstil** öffnen und den gewünschten Stil auswählen. Optional lassen sich dort auch Akzent- und Heizungsfarbe als Hex-Werte eintragen. Weitere Konfigurationsoptionen bleiben im YAML-Editor verfügbar.
-
-| Farbstil | `color_scheme` | Darstellung |
+| Scheme | `color_scheme` | Appearance |
 | --- | --- | --- |
-| **Vaillant** | `vaillant` | Grüntöne und warme Heizungsakzente |
-| **Home Assistant** | `home_assistant` | Hintergrund, Text, Akzent und Rahmen aus dem aktiven HA-Theme; Standard |
-| **Glas** | `glass` | Transparente Flächen mit Unschärfe und Theme-Akzentfarbe |
-| **Graphit** | `graphite` | Neutrale Grau- und dezente Lavendeltöne |
-| **Ozean** | `ocean` | Blautöne mit hellblauen Akzenten |
+| Home Assistant | `home_assistant` | Uses the active HA theme for backgrounds, text, accents and borders; default |
+| Vaillant | `vaillant` | Greens with warm heating accents |
+| Glass | `glass` | Transparent surfaces, blur and theme accent |
+| Graphite | `graphite` | Neutral grays and subtle lavender accents |
+| Ocean | `ocean` | Blues with light-blue accents |
 
-Alle Stile folgen dem von Home Assistant gemeldeten Hell-/Dunkelmodus. Ohne `color_scheme` verwendet die Karte den Home-Assistant-Stil. Explizit gewählte Farbstile bleiben unverändert.
-
-### Passend zum Home-Assistant-Standard oder aktiven Theme
+All schemes follow HA light/dark mode. An explicitly configured scheme takes precedence.
 
 ```yaml
 type: custom:vaillant-app-card
 color_scheme: home_assistant
 ```
 
-Dieser Stil nutzt unter anderem `--ha-card-background`, `--card-background-color`, `--primary-text-color`, `--secondary-text-color`, `--primary-color` und die Rahmenvariablen von Home Assistant. Änderungen am aktiven Theme können dadurch auch die Karte einfärben.
+The default uses variables including `--ha-card-background`, `--card-background-color`, `--primary-text-color`, `--secondary-text-color`, `--primary-color` and HA border variables.
 
-### Transparente Glasoptik
+### Glass appearance
 
 ```yaml
 type: custom:vaillant-app-card
 color_scheme: glass
 ```
 
-Ein Dashboard-Hintergrund macht den Effekt deutlich sichtbarer. Die Karte berücksichtigt vorhandene Variablen wie `--ha-card-glass-tint`, `--ha-card-backdrop-filter` und `--ha-card-border-radius`; andernfalls verwendet sie eigene transparente Flächen und einen Blur-Effekt. Zusätzliche Karten oder `card-mod` sind dafür nicht erforderlich. Browser ohne Backdrop-Filter erhalten eine deckende Ersatzdarstellung.
+A dashboard background makes transparency more visible. The card respects `--ha-card-glass-tint`, `--ha-card-backdrop-filter` and `--ha-card-border-radius`, with built-in transparent surfaces and blur as defaults. No `card-mod` or extra card is required. Browsers without backdrop-filter support receive an opaque fallback.
 
-Für ein bereits installiertes Glass-Theme kann auch `home_assistant` passen, wenn dessen Hintergrund und Farben übernommen werden sollen. Der genaue Look hängt von den Variablen und Anpassungen des jeweiligen Themes ab.
+An installed glass theme may also work well with `home_assistant`, which inherits its backgrounds and colors. The result depends on the theme's variables.
 
-### Eigene Akzentfarben
+### Custom accents
 
 ```yaml
 type: custom:vaillant-app-card
@@ -227,38 +191,42 @@ accent_color: "#03a9f4"
 heating_color: "#ff9800"
 ```
 
-`accent_color` färbt aktive Elemente und die allgemeinen Akzente; `heating_color` die Heizungsakzente. Erlaubt sind Hex-Farben mit 3, 4, 6 oder 8 Stellen. Im YAML die Werte in Anführungszeichen setzen, da `#` sonst einen Kommentar einleitet. Zum Zurücksetzen die Option entfernen bzw. das Feld im visuellen Editor leeren.
+`accent_color` controls general accents and active elements; `heating_color` controls heating accents. Hex values may have 3, 4, 6 or 8 digits. Quote them in YAML because `#` starts a comment. Remove an option or clear its editor field to restore the scheme default.
 
-## Konfiguration
+## Configuration
 
-Beschriftung und Farben lassen sich im visuellen Karteneditor einstellen. Für die vollständige Konfiguration, etwa Entitätszuordnungen und feste Anlagenindizes, den YAML-Editor verwenden.
+Use the visual editor for labels, language and colors. Entity assignments and fixed system indices require YAML.
 
-| Option | Typ | Standard | Beschreibung |
+| Option | Type | Default | Description |
 | --- | --- | --- | --- |
-| `type` | String | erforderlich | `custom:vaillant-app-card` |
-| `title` | String | `Wärmepumpe` | Überschrift der Karte |
-| `zone_name` | String | `Heizung` | Anzeigename der Heizungsansicht |
-| `color_scheme` | String | `home_assistant` | `vaillant`, `home_assistant`, `glass`, `graphite` oder `ocean` |
-| `accent_color` | String | aus Farbstil/Theme | Optionale Hex-Farbe für allgemeine Akzente |
-| `heating_color` | String | aus Farbstil/Theme | Optionale Hex-Farbe für Heizungsakzente |
-| `auto_discover` | Boolean | `true` | Automatische Entitätszuordnung aktivieren |
-| `system_id` | String | automatisch | Bestimmte myVAILLANT-Anlage auswählen |
-| `config_entry_id` | String | alle myVAILLANT-Einträge | Suche auf einen Integrationseintrag beschränken |
-| `zone` | Ganzzahl | automatisch/Auswahl | Technischer Index der Heizzone |
-| `circuit` | Ganzzahl | automatisch/Auswahl | Technischer Index des Heizkreises |
-| `water` | Ganzzahl | automatisch/Auswahl | Technischer Index des Warmwasserspeichers |
-| `energy_device_id` | String | automatisch/Auswahl | HA-Geräte-ID des Energiegeräts |
-| `entities` | Objekt | `{}` | Einzelne Entitätszuordnungen überschreiben |
+| `type` | String | required | `custom:vaillant-app-card` |
+| `title` | String | localized | Card heading; custom text is preserved |
+| `zone_name` | String | localized | Heating view name; custom text is preserved |
+| `language` | String | `auto` | HA language; override with `de` or `en`. Other HA languages fall back to English. |
+| `color_scheme` | String | `home_assistant` | `home_assistant`, `vaillant`, `glass`, `graphite`, `ocean` |
+| `accent_color` | String | scheme/theme | Optional general accent hex color |
+| `heating_color` | String | scheme/theme | Optional heating accent hex color |
+| `auto_discover` | Boolean | `true` | Enable automatic matching |
+| `system_id` | String | automatic | Select a specific myVAILLANT system |
+| `config_entry_id` | String | all myVAILLANT entries | Restrict discovery to one integration entry |
+| `zone` | Integer | automatic/selection | Technical heating-zone index |
+| `circuit` | Integer | automatic/selection | Technical heating-circuit index |
+| `water` | Integer | automatic/selection | Technical hot-water tank index |
+| `energy_device_id` | String | automatic/selection | HA device ID for energy readings |
+| `entities` | Object | `{}` | Override individual assignments |
 
-### Eigene Beschriftung
+### Language and custom labels
 
 ```yaml
 type: custom:vaillant-app-card
-title: Heizung und Warmwasser
-zone_name: Erdgeschoss
+language: en
+title: Heating and hot water
+zone_name: Ground floor
 ```
 
-### Zone und Heizkreis festlegen
+Without an override, the UI follows HA's language, supporting German and English with English as fallback. Source messages, identifiers and comments are English; German UI text is held in a separate translation dictionary. Custom labels and entity values are preserved.
+
+### Fixed zone and circuit
 
 ```yaml
 type: custom:vaillant-app-card
@@ -267,9 +235,9 @@ circuit: 0
 water: 0
 ```
 
-Die Indizes sind Beispiele. Sie müssen zur eigenen Integration passen und stimmen nicht zwingend mit den sichtbaren Zonennummern überein. Die lokale Auswahl im YAML bleibt nach einem Neuladen erhalten; eine Auswahl über die Dropdowns gilt für die aktuelle Karteninstanz.
+These are example indices. Match them to your integration; technical indices may differ from visible zone numbers. YAML choices persist across reloads. Dropdown choices apply to the current card instance.
 
-### Einzelne Entitäten ersetzen
+### Entity overrides
 
 ```yaml
 type: custom:vaillant-app-card
@@ -278,33 +246,33 @@ entities:
   outdoor: sensor.example_outdoor_temperature
 ```
 
-Lokale Zuordnungen unter `entities` haben Vorrang vor der automatischen Erkennung. `null` deaktiviert die betreffende Zuordnung; das zugehörige Anzeigeelement wird dadurch nicht automatisch ausgeblendet.
+Local assignments override discovery. `null` disables an assignment but does not automatically hide the corresponding UI element.
 
 <details>
-<summary>Alle Schlüssel für Entitätszuordnungen</summary>
+<summary>All entity assignment keys</summary>
 
-| Bereich | Schlüssel |
+| Area | Keys |
 | --- | --- |
-| Steuerung | `climate`, `water_heater` |
-| Raum und Außen | `room`, `humidity`, `outdoor` |
-| Sollwerte und Betriebsart | `heating_target`, `heating_mode`, `water_target` |
-| Vorlauf und Speicher | `flow`, `flow_target`, `system_flow`, `tank` |
-| Anlagenstatus | `pressure`, `online`, `trouble`, `operating_state`, `circuit_state` |
-| Schnellzugriff | `boost`, `ventilation`, `away` |
-| Heizungseinstellungen | `heating_curve`, `veto_duration` |
-| Kalender | `heating_calendar`, `water_calendar`, `circulation_calendar` |
-| Elektrische Energie | `electric_heating`, `electric_water` |
-| Umweltertrag | `environment_heating`, `environment_water` |
-| Erzeugte Wärme | `heat_heating`, `heat_water` |
-| Hydraulikstation | `hydraulic_electric`, `hydraulic_heat` |
-| Effizienz und Firmware | `efficiency`, `firmware`, `firmware_update` |
+| Controls | `climate`, `water_heater` |
+| Room and outdoors | `room`, `humidity`, `outdoor` |
+| Targets and mode | `heating_target`, `heating_mode`, `water_target` |
+| Flow and tank | `flow`, `flow_target`, `system_flow`, `tank` |
+| System state | `pressure`, `online`, `trouble`, `operating_state`, `circuit_state` |
+| Quick actions | `boost`, `ventilation`, `away` |
+| Heating settings | `heating_curve`, `veto_duration` |
+| Calendars | `heating_calendar`, `water_calendar`, `circulation_calendar` |
+| Electrical energy | `electric_heating`, `electric_water` |
+| Environmental energy | `environment_heating`, `environment_water` |
+| Generated heat | `heat_heating`, `heat_water` |
+| Hydraulic station | `hydraulic_electric`, `hydraulic_heat` |
+| Efficiency and firmware | `efficiency`, `firmware`, `firmware_update` |
 
-Die Werte sind die jeweiligen Entitäts-IDs aus der eigenen HA-Installation. Private Zuordnungen gehören ins lokale Dashboard-YAML, nicht in öffentliche Beispiele.
+Values are entity IDs from your own HA installation. Keep private assignments in local dashboard YAML, not public examples.
 
 </details>
 
 <details>
-<summary>Vollständig manuelle Konfiguration</summary>
+<summary>Fully manual setup</summary>
 
 ```yaml
 type: custom:vaillant-app-card
@@ -314,85 +282,84 @@ entities:
   water_heater: water_heater.example_hot_water
 ```
 
-Weitere Werte können mit den oben aufgeführten Schlüsseln ergänzt werden. Sämtliche Entitäts-IDs in diesen Beispielen sind erfunden.
+Add other assignments using the keys above. All example entity IDs are invented.
 
 </details>
 
-## Automatische Zuordnung
+## Automatic matching
 
-Die Karte liest die Home-Assistant-Entitätsregistrierung und berücksichtigt die Plattform `mypyllant`. Allgemeine Integrationskennungen ordnen Heizung, Warmwasser und Sensoren zu; private IDs müssen nicht in den Quellcode eingetragen werden.
+The card reads HA's entity registry and filters for platform `mypyllant`. Integration identifiers match heating, hot water and sensor entities without private IDs in the source code.
 
-Für die Energiearten verwendet die Erkennung die ursprünglichen Namen der Integration. Umbenannte Entitäts-IDs und eigene Anzeigenamen bleiben davon unabhängig. Bei mehreren Energiegeräten erfolgt eine Auswahl; deren Messwerte werden nicht beliebig zusammengezählt.
+Energy matching uses original integration names, independently of renamed entity IDs or custom display names. Multiple energy devices require a selection; their measurements are not arbitrarily added together.
 
-Deaktivierte Entitäten können erkannt werden, liefern aber keine Zustände. Die Erkennung aktiviert sie nicht. Für fehlende Werte erscheint „—“ oder ein Hinweis; ohne aktive Steuerentität bleiben die zugehörigen Bedienelemente gesperrt.
+Disabled entities may be discovered but provide no state. Discovery does not enable them. Missing readings show “—” or a notice; controls without an active control entity remain disabled.
 
-Nach dem Hinzufügen oder Umbenennen einer Entität **Anlage → Entitäten neu suchen** verwenden. Zustandsänderungen kommen über die bestehende HA-Verbindung; die Karte fordert keine zusätzlichen Vaillant-Cloud-Aktualisierungen an.
+After adding or renaming an entity, use **System → Discover entities again**. State changes arrive over the existing HA connection. The card does not request additional Vaillant cloud refreshes.
 
-## Bedienung und Grenzen
+## Controls and limitations
 
-| Funktion | Verhalten |
+| Feature | Behavior |
 | --- | --- |
-| **Plus/Minus** | Direkt in Übersicht und Details verfügbar. Sendet eine echte Solltemperaturänderung. Grenzen und Schrittweite stammen aus der Entität; ohne Schrittweite gelten 0,5 °C für Heizung und 1 °C für Warmwasser. |
-| **Betriebsart** | Bietet die von der Entität gemeldeten Modi an. `heat_cool` wird gemäß der myVAILLANT-Zuordnung als „Manuell“ bezeichnet. |
-| **Quick Veto** | Im Zeitbetrieb kann eine Temperaturänderung nur vorübergehend gelten. Die Karte ändert die Dauer nicht automatisch. |
-| **Heizkurve / weitere Einstellungen** | Öffnet die jeweiligen Home-Assistant-Entitätsdetails. |
-| **Wochenplaner / Zirkulation** | Öffnet die Kalender-Entitätsdetails. Bearbeitung im HA-Kalender; dort wöchentliche Wiederholung wählen. Kein eigener Zeitplaneditor. |
-| **Energie** | Zeigt aktuelle Sensorstände mit Umrechnung von Wh/kWh/MWh. Keine Monats- oder Jahresauswertung. Hydraulikstation separat. |
+| Plus/minus | Available in overview and details; sends a real target-temperature change. Limits and steps come from the entity. Fallback steps: 0.5 °C for heating and 1 °C for hot water. |
+| Operating mode | Uses modes reported by the entity. `heat_cool` is labeled “Manual” according to the myVAILLANT mapping. |
+| Quick Veto | In scheduled operation, a temperature change may be temporary. The card does not automatically change its duration. |
+| Heating curve / other settings | Opens HA entity details. |
+| Weekly schedule / circulation | Opens calendar entity details. Edit schedules in the HA calendar using weekly recurrence; no built-in schedule editor. |
+| Energy | Current sensor values with Wh/kWh/MWh conversion. No monthly/yearly analysis; hydraulic station shown separately. |
 
-Ein erfolgreich gesendeter Befehl bestätigt noch nicht die Änderung an der Anlage. Die Karte wartet auf die Zustandsrückmeldung; bleibt die Temperaturbestätigung aus, zeigt sie nach 45 Sekunden wieder den gemeldeten Wert und einen Hinweis.
+A successfully sent command does not confirm that the equipment applied it. The card waits for a state update. If a temperature is not confirmed within 45 seconds, it returns to the reported value and shows a notice.
 
 ## Updates
 
-**HACS:** Die Karte in HACS öffnen und eine angebotene Aktualisierung herunterladen. Falls nötig, die Repository-Informationen aktualisieren und **erneut herunterladen**. Danach das Frontend neu laden.
+**HACS:** Download available updates from the card's HACS page. Refresh repository information and redownload if needed, then reload the frontend.
 
-**Manuell:** Die JavaScript-Datei ersetzen und den Versionsparameter der Ressourcen-URL anpassen, damit der Browser die neue Datei lädt.
+**Manual:** Replace the JavaScript file and change the resource URL's version parameter to invalidate the browser cache.
 
-**Neu in 1.3.1:** Home Assistant ist der Standardfarbstil. Das gilt auch im visuellen Editor. Für die bisherige Farbgebung ausdrücklich `color_scheme: vaillant` setzen.
+- **1.4.0:** English source messages; English/German UI, editor language selection and bilingual documentation. Prominent AI-generation and test-limit notices.
+- **1.3.1:** Home Assistant is the default scheme, including in the editor. Set `color_scheme: vaillant` for the earlier appearance.
+- **1.3.0:** Five color schemes, theme colors, glass appearance and visual editor.
+- **1.2.0:** Responsive views, inline overview controls, adapted navigation and light/dark mode.
+- **1.1.0:** Removed fixed installation IDs. Existing local `entities` overrides retain precedence.
 
-**Neu in 1.3.0:** Fünf auswählbare Farbstile, HA-Theme-Farben, Glasoptik und visueller Editor für Beschriftung und Farben. Explizit gewählte Farbstile behalten Vorrang.
+## Troubleshooting
 
-**Neu in 1.2.0:** Responsive Ansichten, direkte Sollwertsteuerung in der Übersicht, angepasste Navigation und Hell-/Dunkelmodus. Die bestehende Kartenkonfiguration bleibt gültig.
-
-**Wechsel von 1.0.0 auf 1.1.0:** Die festen Installations-IDs entfallen. Die minimale Konfiguration aus dem Schnellstart genügt; bestehende lokale `entities`-Zuordnungen behalten Vorrang.
-
-## Fehlerhilfe
-
-| Problem | Prüfen / beheben |
+| Problem | Check / solution |
 | --- | --- |
-| `Custom element doesn't exist: vaillant-app-card` | Ressource prüfen: richtige URL, Typ **JavaScript-Modul**, Datei erreichbar. Frontend neu laden, gegebenenfalls Browsercache leeren. |
-| Keine Anlage gefunden | myVAILLANT-Integration eingerichtet und geladen? Plattform `mypyllant`? Bei mehreren Anlagen die Auswahl in der Karte beachten. |
-| Automatische Zuordnung nicht möglich | **Entitäten neu suchen** verwenden. Kann die Sitzung die Registrierung nicht lesen, lokale Zuordnungen unter `entities` angeben. |
-| Werte fehlen oder stehen auf „—“ | Unter **Einstellungen → Geräte & Dienste → Entitäten** nach myVAILLANT filtern, deaktivierte Entitäten einblenden und benötigte aktivieren. |
-| Plus/Minus ausgegraut | Steuerentität aktiv und verfügbar? Unterstützt sie die Temperatursteuerung? Ist bereits der minimale/maximale Sollwert erreicht? Meldet die Anlage sich offline? |
-| Alte Oberfläche nach einem Update | In HACS erneut herunterladen, Frontend neu laden und Browsercache prüfen. Doppelte Ressourcen entfernen. |
-| Energieanzeige fehlt oder ist veraltet | Energieentitäten und deren Zustand direkt in HA prüfen. Mehrere Energiegeräte gegebenenfalls auswählen. Zeitraum und Aktualisierung hängen von der Integration ab. |
-| Am Desktop erscheint die kompakte Ansicht | Die Karte hat weniger als 620 px Breite. Abschnitt verbreitern oder Panel-Ansicht verwenden. |
-| Neuer Farbstil/Editor fehlt | Aktuelle Version in HACS erneut herunterladen und das Frontend neu laden; veraltete Ressourcen und Browsercache prüfen. |
-| Glasoptik wirkt kaum transparent | `color_scheme: glass` gesetzt? Mit Dashboard-Hintergrund prüfen; ein Theme kann Tint/Blur überschreiben. Ohne Backdrop-Filter verwendet die Karte eine deckende Ersatzdarstellung. |
-| Dropdown-Auswahl nach Neuladen weg | Gewünschte Anlage, Zone oder Gerätezuordnung im lokalen Karten-YAML festlegen. |
+| `Custom element doesn't exist: vaillant-app-card` | Check resource URL, JavaScript module type and file access; reload the frontend and clear browser cache if needed. |
+| No system found | Check that the myVAILLANT integration is loaded and uses `mypyllant`; select a system if prompted. |
+| Automatic matching fails | Retry discovery. If the session cannot read the registry, use local `entities` assignments. |
+| Missing values / “—” | Filter **Settings → Devices & services → Entities** for myVAILLANT, show disabled entities and enable those required. |
+| Disabled temperature buttons | Check control entity availability, temperature support, limits, pending commands and offline state. |
+| Old UI after updating | Redownload in HACS, reload the frontend, check cache and remove duplicate resources. |
+| Missing or stale energy data | Check energy entities directly in HA and select the energy device if prompted. Periods and refresh rates depend on the integration. |
+| Compact desktop layout | Card width is below 620 px; widen the section or use a panel view. |
+| New scheme/editor missing | Redownload the current version and check frontend cache and old resources. |
+| Glass looks opaque | Select `glass`, use a dashboard background and check theme tint/blur overrides. Unsupported browsers use an opaque fallback. |
+| Selection lost after reload | Configure the desired system, zone or device in local YAML. |
+| Wrong language | Use `language: de` or `language: en`; `auto` follows HA and falls back to English for unsupported languages. |
 
-## Datenschutz
+## Privacy
 
-Die automatische Zuordnung erfolgt in der vorhandenen Home-Assistant-Sitzung im Browser. Die Karte hält die Zuordnung im Arbeitsspeicher, speichert sie nicht im lokalen Browserspeicher und übermittelt keine Anlagendaten an GitHub oder einen zusätzlichen Dienst. Das eigene Speicher- und Cloud-Verhalten von HA und myVAILLANT bleibt davon unberührt.
+Discovery runs inside the current authenticated HA browser session. Assignments are held in memory, not local browser storage. The card sends no equipment data to GitHub or an additional service. HA's and myVAILLANT's own storage and cloud behavior remain separate.
 
-Der aktuelle Quellcode enthält keine persönlichen Entitäts-IDs, System-IDs, Seriennummern, Messwerte oder Zugangsdaten einer konkreten Installation. Die Vorschau und die Tests verwenden Beispieldaten. Frühere Commits können frühere Inhalte weiterhin enthalten.
+Current source contains no personal entity IDs, system IDs, serial numbers, readings or credentials from a specific installation. Tests and previews use example data. Earlier commits may retain earlier content.
 
-## Entwicklung und Support
+## Development and support
 
-Für die Karte sind keine zusätzlichen Laufzeitbibliotheken erforderlich. Prüfungen mit Node.js:
+No extra runtime libraries are required. Run:
 
 ```sh
 node --test tests/discovery.test.cjs
 node --check vaillant-app-card.js
 ```
 
-Automatische Zuordnung, getrennte Sollwertbestätigungen, Serviceziele, Container-Layouts, Farbstile, visueller Editor und Browserdarstellung wurden mit simulierten Daten geprüft. Die Ansichten wurden bei 320, 390, 820 und 1400 px Fensterbreite sowie als schmale Karte in einem breiten Desktopfenster geprüft. Eine Prüfung an einer echten Anlage steht noch aus.
+Simulated checks cover discovery, independent temperature confirmations, service targets, container layouts, color schemes, the editor and browser rendering. Layouts have been checked at 320, 390, 820 and 1400 px viewport widths and with a narrow card in a wide desktop window. Language checks cover selection, fallback, labels and preserved custom names. **These checks are limited and do not establish compatibility with every HA version, browser, theme or heating system. Physical-system validation remains outstanding.**
 
-Fehler und Verbesserungsvorschläge können über [GitHub Issues](https://github.com/kafast/ha-vaillant-card/issues) gemeldet werden. Hilfreich sind HA-Version, Version der myVAILLANT-Integration, Kartenversion sowie die Schritte zur Reproduktion. Private IDs, Seriennummern, Zugangsdaten und persönliche Screenshots vorher entfernen bzw. unkenntlich machen.
+Report bugs and improvements through [GitHub Issues](https://github.com/kafast/ha-vaillant-card/issues). Include HA, integration and card versions, plus reproduction steps. Remove private IDs, serial numbers, credentials and personal information from logs and screenshots first.
 
-### Verwendete Schnittstellen und Design
+### Interfaces and design references
 
-- [Home Assistant Custom Cards](https://contributors.home-assistant.io/frontend/custom-ui/card/)
-- [Home Assistant Entitätsregistrierung](https://github.com/home-assistant/core/blob/dev/homeassistant/components/config/entity_registry.py)
-- [myVAILLANT-Integration](https://github.com/signalkraft/mypyllant-component)
-- Gestaltung inspiriert von der myVAILLANT-App; keine offiziellen Vaillant-Bilddateien oder Logos enthalten.
+- [Home Assistant custom cards](https://contributors.home-assistant.io/frontend/custom-ui/card/)
+- [HA entity registry](https://github.com/home-assistant/core/blob/dev/homeassistant/components/config/entity_registry.py)
+- [myVAILLANT integration](https://github.com/signalkraft/mypyllant-component)
+- Design inspired by myVAILLANT; no official Vaillant image files or logos included.
