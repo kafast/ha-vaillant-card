@@ -1,8 +1,9 @@
-/* Vaillant App Card v1.3.0 — independent custom card, no external dependencies. */
+/* Vaillant App Card v1.3.1 — independent custom card, no external dependencies. */
 (() => {
   // Registry data stays in the authenticated HA browser session, never in the repository.
   const REGISTRY_CACHE = new WeakMap();
   const COLOR_SCHEMES = {vaillant:'Vaillant',home_assistant:'Home Assistant',glass:'Glas',graphite:'Graphit',ocean:'Ozean'};
+  const DEFAULT_COLOR_SCHEME = 'home_assistant';
   const isHexColor = value => typeof value==='string' && /^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(value);
   const ENTITY_KEYS = ['climate','water_heater','room','humidity','outdoor','tank','water_target',
     'heating_target','heating_mode','flow','flow_target','system_flow','pressure','online','trouble',
@@ -273,7 +274,7 @@ ha-card.light[data-color-scheme="ocean"]{
       for(const key of ['zone','circuit','water']) if(config[key]!==undefined && !/^\d+$/.test(String(config[key]))) throw new Error(key+' muss ein nichtnegativer Index sein.');
       if(config.color_scheme!==undefined && !Object.prototype.hasOwnProperty.call(COLOR_SCHEMES,config.color_scheme)) throw new Error('Unbekannter Farbstil: '+String(config.color_scheme));
       for(const key of ['accent_color','heating_color']) if(config[key]!==undefined && !isHexColor(config[key])) throw new Error(key+' muss eine Hex-Farbe sein, z. B. #03a9f4.');
-      this._config={title:'Wärmepumpe', zone_name:'Heizung', color_scheme:'vaillant', ...config};
+      this._config={title:'Wärmepumpe', zone_name:'Heizung', color_scheme:DEFAULT_COLOR_SCHEME, ...config};
       this._ids={...emptyIds(), ...(config.entities || {})};
       this._selected={}; this._choices={}; this._registry=null; this._discoveryIssues=[]; this._discoveryError=null; this._discoveryBusy=false;
       this._discoveryToken++; this._resetPending(); this._signature=null;
@@ -476,7 +477,7 @@ ha-card.light[data-color-scheme="ocean"]{
         :host{display:block;color:var(--primary-text-color,#212121);font-family:inherit}*{box-sizing:border-box}.fields{display:grid;gap:16px;padding:8px 0}label{display:grid;gap:7px;font-size:13px}input,select{font:inherit;color:inherit;min-height:44px;border:1px solid var(--divider-color,#ccc);border-radius:8px;background:var(--card-background-color,#fff);padding:10px 12px;width:100%}input:focus-visible,select:focus-visible{outline:2px solid var(--primary-color,#03a9f4);outline-offset:2px}.pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}p{font-size:12px;line-height:1.6;margin:0;color:var(--secondary-text-color,#666)}.error{color:var(--error-color,#b3261e)}@media(max-width:500px){.pair{grid-template-columns:1fr}}
         </style><div class="fields">
         <div class="pair">${field('title','Überschrift','Wärmepumpe')}${field('zone_name','Name der Heizung','Heizung')}</div>
-        <label>Farbstil<select data-key="color_scheme">${Object.entries(COLOR_SCHEMES).map(([key,name])=>`<option value="${key}" ${key===(this._config.color_scheme || 'vaillant')?'selected':''}>${name}</option>`).join('')}</select></label>
+        <label>Farbstil<select data-key="color_scheme">${Object.entries(COLOR_SCHEMES).map(([key,name])=>`<option value="${key}" ${key===(this._config.color_scheme || DEFAULT_COLOR_SCHEME)?'selected':''}>${name}</option>`).join('')}</select></label>
         <p>Home Assistant übernimmt die Farben des aktiven Themes. Glas nutzt transparente Flächen; mit einem Dashboard-Hintergrund ist der Effekt deutlicher. Hell/Dunkel folgt Home Assistant.</p>
         <div class="pair">${field('accent_color','Akzentfarbe · optional','#03a9f4')}${field('heating_color','Heizungsfarbe · optional','#ff9800')}</div>
         <p>Farbwerte als Hex eingeben. Leere Felder verwenden die Farben des Farbstils. Weitere Einstellungen sind im YAML-Editor verfügbar.</p>

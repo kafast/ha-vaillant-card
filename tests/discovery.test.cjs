@@ -124,8 +124,10 @@ test('overview controls keep heating and hot-water targets and confirmations sep
   states[f.ids.climate].attributes.temperature=21.5;
   assert.equal(c._target(false),21.5);assert.equal(c._target(true),51);assert.ok(c._pendingTemps.water_heater);assert.equal(c._pendingTemps.climate,undefined);
 });
-test('color schemes retain the existing default and reject invalid style input',()=>{
-  const {Card}=environment();const c=new Card();c.setConfig({});assert.equal(c._config.color_scheme,'vaillant');
+test('HA colors are the default and explicit schemes remain supported',()=>{
+  const {Card,Editor}=environment();const c=new Card();c.setConfig({});assert.equal(c._config.color_scheme,'home_assistant');
+  const editor=new Editor();editor.setConfig({});assert.ok(editor.shadowRoot.innerHTML.includes('value="home_assistant" selected'));
+  editor.setConfig({color_scheme:'vaillant'});assert.ok(editor.shadowRoot.innerHTML.includes('value="vaillant" selected'));
   for(const color_scheme of ['vaillant','home_assistant','glass','graphite','ocean']){c.setConfig({color_scheme,accent_color:'#03a9f4',heating_color:'#f90'});assert.equal(c._config.color_scheme,color_scheme);}
   assert.throws(()=>c.setConfig({color_scheme:'unknown'}));
   for(const accent_color of ['red;display:none','#12345','#fff" onclick="alert(1)','var(--anything)'])assert.throws(()=>c.setConfig({accent_color}));

@@ -110,7 +110,7 @@ HACS verwaltet die JavaScript-Ressource normalerweise selbst. Fehlt sie unter **
 
    | Feld | Wert |
    | --- | --- |
-   | URL | `/local/vaillant-app-card.js?v=1.3.0` |
+   | URL | `/local/vaillant-app-card.js?v=1.3.1` |
    | Ressourcentyp | JavaScript-Modul |
 
 4. Das Frontend neu laden.
@@ -125,7 +125,7 @@ In die vorhandene Ressourcenliste eintragen:
 ```yaml
 lovelace:
   resources:
-    - url: /local/vaillant-app-card.js?v=1.3.0
+    - url: /local/vaillant-app-card.js?v=1.3.1
       type: module
 ```
 
@@ -190,13 +190,13 @@ Das ist eine vollständige Ansicht, nicht der Inhalt einer einzelnen manuellen K
 
 | Farbstil | `color_scheme` | Darstellung |
 | --- | --- | --- |
-| **Vaillant** | `vaillant` | Grüntöne und warme Heizungsakzente; bisheriger Standard |
-| **Home Assistant** | `home_assistant` | Hintergrund, Text, Akzent und Rahmen aus dem aktiven HA-Theme |
+| **Vaillant** | `vaillant` | Grüntöne und warme Heizungsakzente |
+| **Home Assistant** | `home_assistant` | Hintergrund, Text, Akzent und Rahmen aus dem aktiven HA-Theme; Standard |
 | **Glas** | `glass` | Transparente Flächen mit Unschärfe und Theme-Akzentfarbe |
 | **Graphit** | `graphite` | Neutrale Grau- und dezente Lavendeltöne |
 | **Ozean** | `ocean` | Blautöne mit hellblauen Akzenten |
 
-Alle Stile folgen dem von Home Assistant gemeldeten Hell-/Dunkelmodus. Ohne `color_scheme` bleibt die bestehende Vaillant-Farbgebung erhalten.
+Alle Stile folgen dem von Home Assistant gemeldeten Hell-/Dunkelmodus. Ohne `color_scheme` verwendet die Karte den Home-Assistant-Stil. Explizit gewählte Farbstile bleiben unverändert.
 
 ### Passend zum Home-Assistant-Standard oder aktiven Theme
 
@@ -238,7 +238,7 @@ Beschriftung und Farben lassen sich im visuellen Karteneditor einstellen. Für d
 | `type` | String | erforderlich | `custom:vaillant-app-card` |
 | `title` | String | `Wärmepumpe` | Überschrift der Karte |
 | `zone_name` | String | `Heizung` | Anzeigename der Heizungsansicht |
-| `color_scheme` | String | `vaillant` | `vaillant`, `home_assistant`, `glass`, `graphite` oder `ocean` |
+| `color_scheme` | String | `home_assistant` | `vaillant`, `home_assistant`, `glass`, `graphite` oder `ocean` |
 | `accent_color` | String | aus Farbstil/Theme | Optionale Hex-Farbe für allgemeine Akzente |
 | `heating_color` | String | aus Farbstil/Theme | Optionale Hex-Farbe für Heizungsakzente |
 | `auto_discover` | Boolean | `true` | Automatische Entitätszuordnung aktivieren |
@@ -347,7 +347,9 @@ Ein erfolgreich gesendeter Befehl bestätigt noch nicht die Änderung an der Anl
 
 **Manuell:** Die JavaScript-Datei ersetzen und den Versionsparameter der Ressourcen-URL anpassen, damit der Browser die neue Datei lädt.
 
-**Neu in 1.3.0:** Fünf auswählbare Farbstile, HA-Theme-Farben, Glasoptik und visueller Editor für Beschriftung und Farben. Bestehende Karten bleiben beim Vaillant-Stil.
+**Neu in 1.3.1:** Home Assistant ist der Standardfarbstil. Das gilt auch im visuellen Editor. Für die bisherige Farbgebung ausdrücklich `color_scheme: vaillant` setzen.
+
+**Neu in 1.3.0:** Fünf auswählbare Farbstile, HA-Theme-Farben, Glasoptik und visueller Editor für Beschriftung und Farben. Explizit gewählte Farbstile behalten Vorrang.
 
 **Neu in 1.2.0:** Responsive Ansichten, direkte Sollwertsteuerung in der Übersicht, angepasste Navigation und Hell-/Dunkelmodus. Die bestehende Kartenkonfiguration bleibt gültig.
 
