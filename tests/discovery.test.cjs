@@ -370,3 +370,57 @@ test('cycles and hours render as reported, without converting hours a second tim
   assert.match(c._status(),/Heat pump operation/);assert.match(c._operationStats(),/562/);assert.match(c._operationStats(),/1,112\.0 h/);
   for(const view of ['on_off_cycles','operation_time']){c.setConfig({view,auto_discover:false,control_mode:'read_only',entities:{on_off_cycles:'sensor.cycles',operation_time:'sensor.hours'}});assert.doesNotMatch(c.shadowRoot.innerHTML,/<nav class="footer"/);assert.match(c.shadowRoot.innerHTML,view==='on_off_cycles'?/562/:/1,112\.0 h/);}
 });
+
+async function discoveryCard(f,config={}){
+  const {Card}=environment(),c=new Card();c.setConfig(config);
+  c.hass={connection:{},states:{},callWS:async({type})=>type.includes('entity_registry')?f.registry.entities:f.registry.devices};
+  await c._discoveryPromise;return c;
+}
+
+test('automatic circuit selector hides a uniquely associated circuit despite additional placeholder entries',async()=>{
+  const f=fixture(),c=await discoveryCard(f);
+  assert.equal(c._choices.circuit.length,2);assert.equal(c._selected.circuit,'0');assert.equal(c._circuitLinked,true);
+  assert.doesNotMatch(c._discoveryPanel(),/data-discovery="circuit"/);assert.equal(c._ids.flow,f.ids.flow);
+});
+
+test('a single enabled circuit is chosen without exposing a redundant selector',async()=>{
+  const f=fixture();f.registry.entities.find(e=>e.entity_id===f.ids.climate).original_name='Climate';
+  const other=f.registry.entities.find(e=>e.unique_id.endsWith('_circuit_1_flow_temperature'));other.disabled_by='user';
+  const c=await discoveryCard(f);assert.equal(c._selected.circuit,'0');assert.equal(c._ids.flow,f.ids.flow);
+  assert.equal(c._showCircuitSelector(),false);
+});
+
+test('explicit show/hide options affect presentation without guessing an unresolved circuit',async()=>{
+  const f=fixture();f.registry.entities.find(e=>e.entity_id===f.ids.climate).original_name='Climate';
+  const unresolved=await discoveryCard(f);assert.equal(unresolved._selected.circuit,undefined);assert.equal(unresolved._showCircuitSelector(),true);
+  const hidden=await discoveryCard(f,{show_circuit_selector:false});assert.equal(hidden._showCircuitSelector(),false);assert.equal(hidden._ids.flow,null);assert.match(hidden._discoveryPanel(),/Set circuit in YAML/);
+  const shown=await discoveryCard(fixture(),{show_circuit_selector:true});assert.equal(shown._showCircuitSelector(),true);
+  const pinned=await discoveryCard(f,{show_circuit_selector:false,circuit:0});assert.equal(pinned._ids.flow,f.ids.flow);assert.doesNotMatch(pinned._discoveryPanel(),/Set circuit in YAML/);
+});
+
+test('selectors and unresolved-choice notices are scoped to the values shown on each page',async()=>{
+  const f=fixture();f.registry.entities.find(e=>e.entity_id===f.ids.climate).original_name='Climate';
+  f.add('climate','zone_2_climate','Zone 2 Climate');f.add('water_heater','domestic_hot_water_1_base','Other hot water');
+  const c=await discoveryCard(f,{show_circuit_selector:true});
+  c._page='energy';assert.doesNotMatch(c._discoveryPanel(),/data-discovery="(?:zone|water|circuit)"|Select a heating zone|Select a hot-water tank|Select the associated heating circuit/);
+  c._page='water';assert.match(c._discoveryPanel(),/data-discovery="water"/);assert.doesNotMatch(c._discoveryPanel(),/data-discovery="(?:zone|circuit)"|Select a heating zone|Select the associated heating circuit/);
+  c._page='heating';assert.match(c._discoveryPanel(),/data-discovery="zone"/);assert.match(c._discoveryPanel(),/data-discovery="circuit"/);assert.doesNotMatch(c._discoveryPanel(),/data-discovery="water"/);
+});
+
+test('standalone widgets omit circuit selection when none of their readings depend on it',async()=>{
+  const f=fixture();f.registry.entities.find(e=>e.entity_id===f.ids.climate).original_name='Climate';
+  for(const view of ['energy','efficiency','hot_water','quick_actions','heating','power','on_off_cycles','operation_time']){
+    const c=await discoveryCard(f,{view,show_circuit_selector:true});assert.doesNotMatch(c._discoveryPanel(),/data-discovery="circuit"|Select the associated heating circuit/,view);
+  }
+  const c=await discoveryCard(f,{view:'system_data',show_circuit_selector:true});assert.match(c._discoveryPanel(),/data-discovery="circuit"/);
+});
+
+test('circuit visibility editor uses booleans and preserves other options',()=>{
+  const {Editor,Card}=environment(),editor=new Editor();let event;
+  editor.setConfig({entities:{power:'sensor.example'},circuit:0,control_mode:'admin'});editor.dispatchEvent=e=>{event=e;return true;};
+  for(const [value,expected] of [['false',false],['true',true],['auto','auto']]){
+    editor._change({target:{dataset:{key:'show_circuit_selector'},value}});assert.equal(event.detail.config.show_circuit_selector,expected);
+    assert.equal(event.detail.config.entities.power,'sensor.example');assert.equal(event.detail.config.circuit,0);assert.equal(event.detail.config.control_mode,'admin');
+  }
+  assert.throws(()=>new Card().setConfig({show_circuit_selector:'false'}));
+});

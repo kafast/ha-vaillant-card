@@ -89,7 +89,7 @@ HACS normally manages the resource automatically. If missing under **Settings �
 
 1. Download [`vaillant-app-card.js`](https://raw.githubusercontent.com/kafast/ha-vaillant-card/main/vaillant-app-card.js).
 2. Copy it to `/config/www/vaillant-app-card.js`; create `www` if needed.
-3. Under **Settings → Dashboards → Resources**, add `/local/vaillant-app-card.js?v=1.7.0` as a **JavaScript module**.
+3. Under **Settings → Dashboards → Resources**, add `/local/vaillant-app-card.js?v=1.8.0` as a **JavaScript module**.
 4. Reload the frontend.
 
 Enable advanced mode in your user profile if Resources is hidden. A newly created `www` directory may require an HA restart before its files become accessible.
@@ -102,7 +102,7 @@ Add to the existing resource configuration:
 ```yaml
 lovelace:
   resources:
-    - url: /local/vaillant-app-card.js?v=1.7.0
+    - url: /local/vaillant-app-card.js?v=1.8.0
       type: module
 ```
 
@@ -205,6 +205,7 @@ Use the visual editor for labels, language and colors. Entity assignments and fi
 | `view` | String | `dashboard` | Full dashboard or individual widget; see below |
 | `control_mode` | String | `full` | `full`, `admin` or `read_only` |
 | `control_modes` | Object | `{}` | Additional rules for `heating`, `hot_water`, `quick_actions`, `settings` |
+| `show_circuit_selector` | String / Boolean | `auto` | Circuit selection: automatic, `true` to show, `false` to hide; relevant views only |
 | `show_header` | Boolean | `true` | Show the card heading |
 | `language` | String | `auto` | HA language; override with `de` or `en`. Other HA languages fall back to English. |
 | `color_scheme` | String | `home_assistant` | `home_assistant`, `vaillant`, `glass`, `graphite`, `ocean` |
@@ -369,6 +370,29 @@ zone_name: Ground floor
 
 Without an override, the UI follows HA's language, supporting German and English with English as fallback. Source messages, identifiers and comments are English; German UI text is held in a separate translation dictionary. Custom labels and entity values are preserved.
 
+### Heating-circuit selection
+
+The default `show_circuit_selector: auto` hides a redundant circuit dropdown when only one usable candidate exists or the selected heating zone is unambiguously linked to its circuit. Extra technical circuit entities created by the integration do not force a selector when that association is known. A heating circuit is not considered absent merely because it is currently off or idle.
+
+```yaml
+type: custom:vaillant-app-card
+show_circuit_selector: auto
+```
+
+The visual editor offers **Heating circuit selector → Automatic / Show / Hide**. `true` forces the selector where circuit readings are used, even for a single candidate; `false` hides it. A fixed `circuit` index in YAML always hides the dropdown because that index controls the assignment.
+
+Circuit selection is relevant to the overview's flow reading, heating details with circuit settings, the full system view and the system-data widget. It is omitted from energy, hot-water, power, efficiency and operating-counter views. The standalone heating widget uses zone controls, so it needs zone selection rather than a separate circuit selection. Unresolved circuit notices are also omitted from views that do not use circuit data. Other selectors follow the same principle: for example, energy displays only system/device selection, while hot water displays system/tank selection.
+
+Hiding does not choose an unknown circuit or change the underlying sensor mapping. If the association remains ambiguous, keep automatic selection or pin the correct technical index explicitly:
+
+```yaml
+type: custom:vaillant-app-card
+circuit: 0
+show_circuit_selector: false
+```
+
+Here `0` is an example technical index, displayed as Heating circuit 1. Use the index belonging to your installation. Hidden, unresolved selections remain visible as a diagnostic notice in relevant views.
+
 ### Fixed zone and circuit
 
 ```yaml
@@ -460,6 +484,7 @@ A successfully sent command does not confirm that the equipment applied it. The 
 
 **Manual:** Replace the JavaScript file and change the resource URL's version parameter to invalidate the browser cache.
 
+- **1.8.0:** Hide redundant circuit selection automatically, add a visual/YAML override and limit selectors and notices to relevant views.
 - **1.7.0:** Internal power sensor discovered by default; optional external override retained. Automatic on/off cycle and operating-hour readings, with separate widgets.
 - **1.6.0:** Optional user-selected W/kW power sensor and standalone power widget.
 - **1.5.0:** Individual widgets, view-only/admin control modes and section rules.

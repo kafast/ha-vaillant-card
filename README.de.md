@@ -118,7 +118,7 @@ HACS verwaltet die JavaScript-Ressource normalerweise selbst. Fehlt sie unter **
 
    | Feld | Wert |
    | --- | --- |
-   | URL | `/local/vaillant-app-card.js?v=1.7.0` |
+   | URL | `/local/vaillant-app-card.js?v=1.8.0` |
    | Ressourcentyp | JavaScript-Modul |
 
 4. Das Frontend neu laden.
@@ -133,7 +133,7 @@ In die vorhandene Ressourcenliste eintragen:
 ```yaml
 lovelace:
   resources:
-    - url: /local/vaillant-app-card.js?v=1.7.0
+    - url: /local/vaillant-app-card.js?v=1.8.0
       type: module
 ```
 
@@ -249,6 +249,7 @@ Beschriftung und Farben lassen sich im visuellen Karteneditor einstellen. Für d
 | `view` | String | `dashboard` | Vollständige Karte oder einzelnes Widget; siehe unten |
 | `control_mode` | String | `full` | `full`, `admin` oder `read_only` |
 | `control_modes` | Objekt | `{}` | Zusätzliche Regeln für `heating`, `hot_water`, `quick_actions`, `settings` |
+| `show_circuit_selector` | String / Boolean | `auto` | Heizkreisauswahl: automatisch, mit `true` einblenden oder mit `false` ausblenden; nur in relevanten Ansichten |
 | `show_header` | Boolean | `true` | Kartenüberschrift anzeigen |
 | `language` | String | `auto` | HA-Sprache übernehmen; alternativ `de` oder `en`. Andere HA-Sprachen verwenden Englisch. |
 | `color_scheme` | String | `home_assistant` | `vaillant`, `home_assistant`, `glass`, `graphite` oder `ocean` |
@@ -421,6 +422,29 @@ title: Heizung und Warmwasser
 zone_name: Erdgeschoss
 ```
 
+### Heizkreisauswahl
+
+Standardmäßig blendet `show_circuit_selector: auto` eine überflüssige Heizkreisauswahl aus: wenn nur ein nutzbarer Kandidat vorhanden ist oder die ausgewählte Heizzone eindeutig ihrem Heizkreis zugeordnet ist. Zusätzliche technische Heizkreis-Entitäten der Integration erzwingen dann kein Dropdown. Ein Heizkreis gilt nicht allein deshalb als unbenutzt, weil er momentan ausgeschaltet ist oder im Bereitschaftsbetrieb steht.
+
+```yaml
+type: custom:vaillant-app-card
+show_circuit_selector: auto
+```
+
+Im visuellen Editor gibt es **Heizkreisauswahl → Automatisch / Einblenden / Ausblenden**. `true` zeigt die Auswahl in Ansichten mit Heizkreisdaten auch bei einem einzelnen Kandidaten; `false` blendet sie aus. Ein festes `circuit` im YAML blendet das Dropdown immer aus, weil dann dieser Index die Zuordnung vorgibt.
+
+Eine Heizkreisauswahl betrifft den Vorlauf in der Übersicht, Heizungsdetails mit Kreiseinstellungen, die vollständige Anlagenansicht und das Anlagendaten-Widget. Bei Energie, Warmwasser, Leistung, Effizienz und Betriebszählern entfällt sie. Das einzelne Heizungs-Widget verwendet Zonensteuerung und braucht deshalb bei mehreren Zonen eine Zonenauswahl, keine separate Heizkreisauswahl. Auch Hinweise auf eine ungeklärte Kreiszuordnung erscheinen nur dort, wo diese Daten benötigt werden. Andere Auswahlen folgen demselben Prinzip: Energie verwendet Anlagen-/Geräteauswahl, Warmwasser Anlagen-/Speicherauswahl.
+
+Ausblenden legt keinen unbekannten Heizkreis fest und verändert keine Sensorzuordnung. Bleibt die Zuordnung mehrdeutig, die automatische Auswahl beibehalten oder den richtigen technischen Index ausdrücklich festlegen:
+
+```yaml
+type: custom:vaillant-app-card
+circuit: 0
+show_circuit_selector: false
+```
+
+`0` ist ein technischer Beispielindex und wird als Heizkreis 1 angezeigt. Den Index der eigenen Anlage verwenden. Eine ausgeblendete, ungeklärte Zuordnung bleibt in relevanten Ansichten als Diagnosehinweis erkennbar.
+
 ### Zone und Heizkreis festlegen
 
 ```yaml
@@ -511,6 +535,8 @@ Ein erfolgreich gesendeter Befehl bestätigt noch nicht die Änderung an der Anl
 **HACS:** Die Karte in HACS öffnen und eine angebotene Aktualisierung herunterladen. Falls nötig, die Repository-Informationen aktualisieren und **erneut herunterladen**. Danach das Frontend neu laden.
 
 **Manuell:** Die JavaScript-Datei ersetzen und den Versionsparameter der Ressourcen-URL anpassen, damit der Browser die neue Datei lädt.
+
+**Neu in 1.8.0:** Überflüssige Heizkreisauswahl automatisch ausblenden, Einstellung im Editor/YAML und kontextbezogene Auswahlfelder sowie Hinweise.
 
 **Neu in 1.7.0:** Interner Leistungssensor als automatischer Standard, andere Quelle weiterhin optional. Ein-/Ausschaltzyklen und Betriebsstunden mit automatischer Zuordnung und einzelnen Widgets.
 

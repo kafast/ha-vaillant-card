@@ -28,3 +28,9 @@ type: custom:vaillant-app-card
 #   power: sensor.example_heat_pump_power
 # Omit or remove the override to use the internal power sensor again.
 # Set power: null under entities to explicitly disable automatic power display.
+# Heating-circuit selector: auto (default), true, false.
+# Appears only in views that use circuit readings/settings.
+# show_circuit_selector: auto
+# Optional: pin the correct technical circuit index and hide its selector:
+# circuit: 0
+# show_circuit_selector: false

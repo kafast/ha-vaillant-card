@@ -1,4 +1,4 @@
-/* Vaillant App Card v1.7.0 — independent custom card, no external dependencies.
+/* Vaillant App Card v1.8.0 — independent custom card, no external dependencies.
  * AI-generated and AI-assisted experimental code. Tests use simulated data;
  * operation on a physical heating system has not been validated. See README. */
 (() => {
@@ -10,6 +10,13 @@
   const CONTROL_MODES = {full:'View and control',admin:'Administrators only',read_only:'View only'};
   const CONTROL_GROUPS = ['heating','hot_water','quick_actions','settings'];
   const DE = {
+  "Heating circuit selector": "Heizkreisauswahl",
+  "Automatic": "Automatisch",
+  "Show": "Einblenden",
+  "Hide": "Ausblenden",
+  "Shown only in views with heating-circuit readings. Automatic hides it when the assignment is unambiguous.": "Nur in Ansichten mit Heizkreisdaten. Automatisch blendet die Auswahl bei eindeutiger Zuordnung aus.",
+  "Set circuit in YAML to resolve the hidden heating-circuit selection.": "Zur eindeutigen Zuordnung des ausgeblendeten Heizkreises circuit im YAML festlegen.",
+
   "On/off cycles": "Ein-/Ausschaltzyklen",
   "Operating hours": "Betriebsstunden",
   "Heat pump operation": "Wärmepumpenbetrieb",
@@ -275,6 +282,7 @@
     const manual = config.entities || {};
     const ids = emptyIds();
     const issues = [];
+    let circuitLinked=false;
     const choices = {system:[], zone:[], water:[], circuit:[], energy_device:[]};
     const all = registry.entities.filter(e => e.platform === 'mypyllant' && (!config.config_entry_id || e.config_entry_id === config.config_entry_id));
     const parsed = all.map(e => {
@@ -294,7 +302,7 @@
     const system = choose(choices.system, config.system_id ?? selected.system ?? pinned?.system);
     const applyManual = () => {
       for (const key of ENTITY_KEYS) if (Object.prototype.hasOwnProperty.call(manual,key)) ids[key] = manual[key] || null;
-      return {ids, choices, selected:selection, issues};
+      return {ids, choices, selected:selection, issues, circuitLinked};
     };
     const selection = {};
     if (!system) {
@@ -345,7 +353,7 @@
       ]) match(key,dom,wp+suffix);
     } else if (choices.water.length>1) issues.push('Select a hot-water tank.');
     const circuits = [...new Set(entries.map(e => uid(e).slice(prefix.length).match(/^circuit_(\d+)_/)?.[1]).filter(v=>v!==undefined))];
-    choices.circuit = circuits.map(value => ({value,label:`Heating circuit ${Number(value)+1}`,disabled:false}));
+    choices.circuit = circuits.map(value => ({value,label:`Heating circuit ${Number(value)+1}`,disabled:entries.filter(e=>uid(e).startsWith(`${prefix}circuit_${value}_`)).every(e=>!!e.disabled_by)}));
     const climateEntry = entries.find(e => e.entity_id === ids.climate);
     // The original integration name contains the actual associated circuit, independently of a renamed entity_id.
     const zoneDevice = registry.devices.find(d => d.id === climateEntry?.device_id);
@@ -356,6 +364,7 @@
     const circuit = choose(choices.circuit, config.circuit ?? selected.circuit ?? associated);
     if (circuit) {
       selection.circuit=circuit.value;
+      circuitLinked=associated!==null&&String(circuit.value)===associated;
       for (const [key,dom,suffix] of [
         ['flow','sensor','flow_temperature'], ['flow_target','sensor','flow_temperature_setpoint'],
         ['circuit_state','sensor','state'], ['heating_curve','number','heating_curve']
@@ -526,15 +535,16 @@ ha-card:not([data-view="dashboard"]) .top{padding:18px 18px 14px}ha-card:not([da
       if(config.language!==undefined && !['auto','en','de'].includes(config.language)) throw new Error('language must be auto, en, or de.');
       if(config.view!==undefined&&!Object.prototype.hasOwnProperty.call(WIDGET_VIEWS,config.view))throw new Error('Unknown widget view.');
       if(config.control_mode!==undefined&&!Object.prototype.hasOwnProperty.call(CONTROL_MODES,config.control_mode))throw new Error('Unknown control mode.');
+      if(config.show_circuit_selector!==undefined&&config.show_circuit_selector!=='auto'&&typeof config.show_circuit_selector!=='boolean')throw new Error('show_circuit_selector must be auto, true, or false.');
       if(config.show_header!==undefined&&typeof config.show_header!=='boolean')throw new Error('show_header must be boolean.');
       if(config.control_modes!==undefined){
         if(!config.control_modes||typeof config.control_modes!=='object'||Array.isArray(config.control_modes))throw new Error('control_modes must be a mapping.');
         for(const [group,mode] of Object.entries(config.control_modes))if(!CONTROL_GROUPS.includes(group)||!Object.prototype.hasOwnProperty.call(CONTROL_MODES,mode))throw new Error('Invalid section control mode.');
       }
       this._customTitle=Object.prototype.hasOwnProperty.call(config,'title');this._customZone=Object.prototype.hasOwnProperty.call(config,'zone_name');
-      this._config={title:'Heat pump', zone_name:'Heating', color_scheme:DEFAULT_COLOR_SCHEME, language:'auto', view:'dashboard', control_mode:'full', ...config};
+      this._config={title:'Heat pump', zone_name:'Heating', color_scheme:DEFAULT_COLOR_SCHEME, language:'auto', view:'dashboard', control_mode:'full', show_circuit_selector:'auto', ...config};
       this._ids={...emptyIds(), ...(config.entities || {})};
-      this._selected={}; this._choices={}; this._registry=null; this._discoveryIssues=[]; this._discoveryError=null; this._discoveryBusy=false;
+      this._selected={}; this._choices={}; this._circuitLinked=false; this._registry=null; this._discoveryIssues=[]; this._discoveryError=null; this._discoveryBusy=false;
       this._discoveryToken++; this._resetPending(); this._signature=null;
       this._render();
       if(this._hass) this._discoveryPromise=this._discover();
@@ -604,16 +614,48 @@ ha-card:not([data-view="dashboard"]) .top{padding:18px 18px 14px}ha-card:not([da
     _applyDiscovery() {
       if(!this._registry)return;
       const resolved=resolveEntities(this._registry,this._config,this._selected);
-      this._ids=resolved.ids; this._choices=resolved.choices; this._selected=resolved.selected; this._discoveryIssues=resolved.issues;
+      this._ids=resolved.ids; this._choices=resolved.choices; this._selected=resolved.selected; this._discoveryIssues=resolved.issues; this._circuitLinked=resolved.circuitLinked;
       this._signature=null;
+    }
+    _discoveryScope(){
+      const page=this._config.view==='dashboard'?this._page:this._config.view;
+      if(['energy','power','on_off_cycles','operation_time'].includes(page))return new Set(['system','energy_device']);
+      if(page==='efficiency')return new Set(['system']);
+      if(['water','hot_water'].includes(page))return new Set(['system','water']);
+      if(page==='quick_actions')return new Set(['system','zone','water']);
+      if(page==='heating'&&this._config.view!=='dashboard')return new Set(['system','zone']);
+      if(page==='heating')return new Set(['system','zone','circuit']);
+      if(page==='system_data')return new Set(['system','zone','circuit','energy_device']);
+      return new Set(['system','zone','water','circuit','energy_device']);
+    }
+    _showCircuitSelector(){
+      const items=this._choices.circuit || [];
+      if(!this._discoveryScope().has('circuit')||this._config.circuit!==undefined||this._config.show_circuit_selector===false)return false;
+      if(this._config.show_circuit_selector===true)return items.length>0;
+      const enabled=items.filter(i=>!i.disabled);
+      return items.length>1&&!(this._selected.circuit!==undefined&&(this._circuitLinked||(enabled.length||items.length)===1));
+    }
+    _issueScope(message){
+      if(message==='Select a heating zone.')return 'zone';
+      if(message==='Select a hot-water tank.')return 'water';
+      if(message==='Select the associated heating circuit; no circuit has been guessed.')return 'circuit';
+      if(message==='Select a device for the energy display.')return 'energy_device';
+      const key=message.match(/^Ambiguous match: (\w+)\.$/)?.[1];
+      if(['flow','flow_target','circuit_state','heating_curve'].includes(key))return 'circuit';
+      if(['water_heater','tank','water_target','boost','water_calendar','circulation_calendar'].includes(key))return 'water';
+      if(['climate','room','humidity','heating_target','heating_mode','ventilation','veto_duration','heating_calendar'].includes(key))return 'zone';
+      return 'system';
     }
     _discoveryPanel() {
       if(this._config.auto_discover===false||(this._config.view==='power'&&Object.prototype.hasOwnProperty.call(this._config.entities || {},'power')))return '';
+      const scope=this._discoveryScope();
       const titles={system:'System',zone:'Heating zone',water:'Hot-water tank',circuit:'Heating circuit',energy_device:'Heat pump device'};
       const pinned={system:'system_id',zone:'zone',water:'water',circuit:'circuit',energy_device:'energy_device_id'};
-      const selectors=Object.entries(this._choices||{}).filter(([key,items])=>items.length>1 && this._config[pinned[key]]===undefined).map(([key,items])=>
+      const selectors=Object.entries(this._choices||{}).filter(([key,items])=>scope.has(key)&&this._config[pinned[key]]===undefined&&(key==='circuit'?this._showCircuitSelector():items.length>1)).map(([key,items])=>
         `<label class="row"><span>${this._t(titles[key])}</span><select data-discovery="${key}" aria-label="${this._t(titles[key])} selection" ${this._busy?'disabled':''}><option value="" disabled ${this._selected[key]===undefined?'selected':''}>Select an option</option>${items.map(i=>`<option data-no-localize value="${esc(i.value)}" ${String(this._selected[key])===String(i.value)?'selected':''}>${esc(key==='circuit'?this._t(i.label):i.label)}${i.disabled?this._t(' (disabled)'):''}</option>`).join('')}</select></label>`).join('');
-      return `${this._discoveryBusy?'<div class="small muted" role="status">Matching myVAILLANT entities …</div>':''}${this._discoveryError?`<div class="message error">${esc(this._discoveryError)}</div>`:''}${selectors}${this._discoveryIssues?.length?`<div class="availability">${this._discoveryIssues.map(esc).join('<br>')}</div>`:''}${this._discoveryError || this._discoveryIssues?.length || this._page==='status' || this._config.view==='system'?'<button class="row" data-discover>Discover entities again</button>':''}`;
+      const issues=(this._discoveryIssues || []).filter(message=>scope.has(this._issueScope(message)));
+      if(scope.has('circuit')&&this._config.show_circuit_selector===false&&this._selected.circuit===undefined&&(this._choices.circuit || []).length>1)issues.push('Set circuit in YAML to resolve the hidden heating-circuit selection.');
+      return `${this._discoveryBusy?'<div class="small muted" role="status">Matching myVAILLANT entities …</div>':''}${this._discoveryError?`<div class="message error">${esc(this._discoveryError)}</div>`:''}${selectors}${issues.length?`<div class="availability">${issues.map(esc).join('<br>')}</div>`:''}${this._discoveryError || issues.length || this._page==='status' || this._config.view==='system'?'<button class="row" data-discover>Discover entities again</button>':''}`;
     }
     _entity(key){return this._hass?.states[this._ids[key]];}
     _ok(key){const s=this._entity(key);return !!s && !['unavailable','unknown'].includes(s.state);}
@@ -806,7 +848,8 @@ ha-card:not([data-view="dashboard"]) .top{padding:18px 18px 14px}ha-card:not([da
         this._config={...this._config,type:this._config.type || 'custom:vaillant-app-card',control_modes:modes};
         this.dispatchEvent(new CustomEvent('config-changed',{detail:{config:{...this._config,control_modes:{...modes}}},bubbles:true,composed:true}));this._render();return;
       }
-      if(!['title','zone_name','color_scheme','accent_color','heating_color','language','view','control_mode'].includes(key))return;
+      if(!['title','zone_name','color_scheme','accent_color','heating_color','language','view','control_mode','show_circuit_selector'].includes(key))return;
+      if(key==='show_circuit_selector'&&!['auto','true','false'].includes(value))return;
       if(key==='view'&&!Object.prototype.hasOwnProperty.call(WIDGET_VIEWS,value))return;
       if(key==='control_mode'&&!Object.prototype.hasOwnProperty.call(CONTROL_MODES,value))return;
       if(key==='language'&&!['auto','en','de'].includes(value))return;
@@ -815,7 +858,7 @@ ha-card:not([data-view="dashboard"]) .top{padding:18px 18px 14px}ha-card:not([da
         this._error='Enter a hex color such as #03a9f4, or leave the field empty.';this._render();return;
       }
       const config={...this._config,type:this._config.type || 'custom:vaillant-app-card'};
-      if(value.trim())config[key]=value.trim();else delete config[key];
+      if(value.trim())config[key]=key==='show_circuit_selector'?(value==='auto'?'auto':value==='true'):value.trim();else delete config[key];
       this._config=config;this._error=null;
       this.dispatchEvent(new CustomEvent('config-changed',{detail:{config},bubbles:true,composed:true}));
       this._render();
@@ -827,7 +870,7 @@ ha-card:not([data-view="dashboard"]) .top{padding:18px 18px 14px}ha-card:not([da
       this.shadowRoot.innerHTML=`<style>
         :host{display:block;color:var(--primary-text-color,#212121);font-family:inherit}*{box-sizing:border-box}.fields{display:grid;gap:16px;padding:8px 0}label{display:grid;gap:7px;font-size:13px}input,select{font:inherit;color:inherit;min-height:44px;border:1px solid var(--divider-color,#ccc);border-radius:8px;background:var(--card-background-color,#fff);padding:10px 12px;width:100%}input:focus-visible,select:focus-visible{outline:2px solid var(--primary-color,#03a9f4);outline-offset:2px}.pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}p{font-size:12px;line-height:1.6;margin:0;color:var(--secondary-text-color,#666)}.error{color:var(--error-color,#b3261e)}@media(max-width:500px){.pair{grid-template-columns:1fr}}
         </style><div class="fields" lang="${getLanguage(this._config,this._hass)}">
-        ${select('view','Widget',WIDGET_VIEWS,this._config.view || 'dashboard')}${select('control_mode','Controls',CONTROL_MODES,this._config.control_mode || 'full')}<details><summary>Section controls</summary><div class="pair">${CONTROL_GROUPS.map(group=>select('control_modes.'+group,({heating:'Heating',hot_water:'Hot water',quick_actions:'Quick actions',settings:'Settings'})[group],{'':'Use card setting',...CONTROL_MODES},this._config.control_modes?.[group] || '')).join('')}</div></details><p>Card controls only; Home Assistant permissions still apply.</p>
+        ${select('view','Widget',WIDGET_VIEWS,this._config.view || 'dashboard')}${select('show_circuit_selector','Heating circuit selector',{auto:'Automatic',true:'Show',false:'Hide'},String(this._config.show_circuit_selector ?? 'auto'))}<p>Shown only in views with heating-circuit readings. Automatic hides it when the assignment is unambiguous.</p>${select('control_mode','Controls',CONTROL_MODES,this._config.control_mode || 'full')}<details><summary>Section controls</summary><div class="pair">${CONTROL_GROUPS.map(group=>select('control_modes.'+group,({heating:'Heating',hot_water:'Hot water',quick_actions:'Quick actions',settings:'Settings'})[group],{'':'Use card setting',...CONTROL_MODES},this._config.control_modes?.[group] || '')).join('')}</div></details><p>Card controls only; Home Assistant permissions still apply.</p>
         <div class="pair">${field('title','Title','Heat pump')}${field('zone_name','Heating name','Heating')}</div>
         <label>Power sensor override · optional<input data-key="entities.power" value="${esc(this._config.entities?.power || '')}" placeholder="sensor.example_heat_pump_power" list="power-sensors" spellcheck="false"></label><datalist id="power-sensors">${powerSensors.map(id=>`<option value="${esc(id)}"></option>`).join('')}</datalist><p>Default: internal myVAILLANT power sensor. Enter a W/kW sensor to override it; clear the field to use automatic discovery again.</p>
         <label>Language<select data-key="language">${[['auto','Automatic (Home Assistant)'],['de','German'],['en','English']].map(([value,label])=>`<option value="${value}" ${value===(this._config.language || 'auto')?'selected':''}>${label}</option>`).join('')}</select></label>
