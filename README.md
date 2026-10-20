@@ -89,7 +89,7 @@ HACS normally manages the resource automatically. If missing under **Settings �
 
 1. Download [`vaillant-app-card.js`](https://raw.githubusercontent.com/kafast/ha-vaillant-card/main/vaillant-app-card.js).
 2. Copy it to `/config/www/vaillant-app-card.js`; create `www` if needed.
-3. Under **Settings → Dashboards → Resources**, add `/local/vaillant-app-card.js?v=1.4.0` as a **JavaScript module**.
+3. Under **Settings → Dashboards → Resources**, add `/local/vaillant-app-card.js?v=1.7.0` as a **JavaScript module**.
 4. Reload the frontend.
 
 Enable advanced mode in your user profile if Resources is hidden. A newly created `www` directory may require an HA restart before its files become accessible.
@@ -102,7 +102,7 @@ Add to the existing resource configuration:
 ```yaml
 lovelace:
   resources:
-    - url: /local/vaillant-app-card.js?v=1.4.0
+    - url: /local/vaillant-app-card.js?v=1.7.0
       type: module
 ```
 
@@ -216,7 +216,7 @@ Use the visual editor for labels, language and colors. Entity assignments and fi
 | `zone` | Integer | automatic/selection | Technical heating-zone index |
 | `circuit` | Integer | automatic/selection | Technical heating-circuit index |
 | `water` | Integer | automatic/selection | Technical hot-water tank index |
-| `energy_device_id` | String | automatic/selection | HA device ID for energy readings |
+| `energy_device_id` | String | automatic/selection | HA device ID for energy, internal power and operation diagnostics |
 | `entities` | Object | `{}` | Override individual assignments |
 
 ## Individual widgets and control modes
@@ -236,7 +236,9 @@ The full dashboard remains the default. Use `view` to place individual areas as 
 | `quick_actions` | Hot-water boost, ventilation boost and away mode |
 | `energy` | Energy overview with missing-reading diagnostics |
 | `efficiency` | A single efficiency reading from the integration |
-| `power` | Optional current electrical power from a selected sensor |
+| `power` | Current electrical power; internal sensor by default, optional override |
+| `on_off_cycles` | Reported heat-pump on/off cycle count |
+| `operation_time` | Reported heat-pump operating hours |
 | `system` | Full system and maintenance view |
 | `system_data` | Compact flow temperature, pressure, outdoor temperature and efficiency |
 
@@ -268,7 +270,9 @@ Use `show_header: false` to hide the card heading. Custom titles, language, colo
 
 ### Optional current electrical power
 
-Choose **Power sensor · optional** in the visual editor, or assign a sensor in YAML:
+The card automatically discovers the internal myVAILLANT **Current Power** sensor on the selected heat pump. No extra configuration is needed. The hydraulic station is not substituted for the heat pump. If multiple candidate devices exist, select **Heat pump device** or set `energy_device_id`.
+
+For another source, choose **Power sensor override · optional** in the visual editor, or assign a sensor in YAML:
 
 ```yaml
 type: custom:vaillant-app-card
@@ -278,7 +282,7 @@ entities:
 
 The sensor may come from myVAILLANT, a separate electricity meter, MQTT or another HA integration. Existing W/kW sensors are suggested in the editor; a future entity ID can also be entered manually. Replace the example ID with your own sensor when it is available.
 
-Without `entities.power` (or with `null`), the optional display stays hidden. Once configured, it appears in the overview, energy and system views, and the system-data widget. The compact overview prioritizes power and water pressure; flow temperature remains in the full system view. Clear the editor field to hide it again without removing other entity assignments.
+Without `entities.power`, the internal source is used automatically. If no matching sensor exists, the optional display stays hidden in the full dashboard. Set `entities.power: null` to disable automatic power display explicitly. An available assignment appears in the overview, energy and system views, and the system-data widget. The compact overview prioritizes power and water pressure; flow temperature remains in the full system view. Clear the editor field to return to the internal source without removing other entity assignments. An explicit override retains precedence even when unavailable; the card does not silently switch sources.
 
 The source unit must be **W** or **kW**. The card converts between them for display and preserves an actual zero. Missing, unavailable, nonnumeric or unsupported-unit values show “—”; they are not treated as zero. A sensor in A, Wh or kWh is not an instantaneous power sensor. No energy totals or COP values are calculated from this optional reading. Updates follow the sensor's own HA integration; this card does not poll it separately.
 
@@ -292,7 +296,27 @@ entities:
   power: sensor.example_heat_pump_power
 ```
 
-The standalone power widget needs no myVAILLANT registry access. Until its sensor is available, it shows an availability notice. Other widgets and the full dashboard keep their usual discovery behavior.
+For the internal source, omit the `entities` block from this widget; automatic discovery then reads the myVAILLANT registry. With an explicit external power assignment, the standalone power widget needs no myVAILLANT registry access. Until its sensor is available, it shows an availability notice.
+
+### On/off cycles and operating hours
+
+The card automatically discovers **On/Off Cycles** and **Operation Time** from the same selected heat pump. They appear under **System → Heat pump operation** and in the system-data widget. Hydraulic-station counters are not mixed into heat-pump values. These are the totals reported by the integration, not daily counters calculated by this card. Operating Time is already exposed in hours by myVAILLANT and is not divided by 60 again.
+
+Standalone widgets:
+
+```yaml
+type: custom:vaillant-app-card
+view: on_off_cycles
+control_mode: read_only
+```
+
+```yaml
+type: custom:vaillant-app-card
+view: operation_time
+control_mode: read_only
+```
+
+Optional manual assignments use `entities.on_off_cycles` and `entities.operation_time`. Missing or disabled source entities cannot provide readings; the integration may require its real-time statistics option. The card never enables integration options or disabled entities itself.
 
 ### Viewing and controlling
 
@@ -365,7 +389,7 @@ entities:
   outdoor: sensor.example_outdoor_temperature
 ```
 
-Local assignments override discovery. `null` disables an assignment but does not automatically hide the corresponding UI element.
+Local assignments override discovery. `null` disables an assignment but normally leaves its UI element visible; optional power display is hidden when its assignment is disabled.
 
 <details>
 <summary>All entity assignment keys</summary>
@@ -384,7 +408,8 @@ Local assignments override discovery. `null` disables an assignment but does not
 | Environmental energy | `environment_heating`, `environment_water` |
 | Generated heat | `heat_heating`, `heat_water` |
 | Hydraulic station | `hydraulic_electric`, `hydraulic_heat` |
-| Current electrical power | `power` (optional; manually selected sensor) |
+| Current electrical power | `power` (automatic internal sensor; optional override) |
+| Heat-pump operation | `on_off_cycles`, `operation_time` |
 | Efficiency and firmware | `efficiency`, `firmware`, `firmware_update` |
 
 Values are entity IDs from your own HA installation. Keep private assignments in local dashboard YAML, not public examples.
@@ -435,6 +460,10 @@ A successfully sent command does not confirm that the equipment applied it. The 
 
 **Manual:** Replace the JavaScript file and change the resource URL's version parameter to invalidate the browser cache.
 
+- **1.7.0:** Internal power sensor discovered by default; optional external override retained. Automatic on/off cycle and operating-hour readings, with separate widgets.
+- **1.6.0:** Optional user-selected W/kW power sensor and standalone power widget.
+- **1.5.0:** Individual widgets, view-only/admin control modes and section rules.
+- **1.4.1:** Discovery for unprefixed energy names and device-based circuit association; clearer offline and missing-data diagnostics.
 - **1.4.0:** English source messages; English/German UI, editor language selection and bilingual documentation. Prominent AI-generation and test-limit notices.
 - **1.3.1:** Home Assistant is the default scheme, including in the editor. Set `color_scheme: vaillant` for the earlier appearance.
 - **1.3.0:** Five color schemes, theme colors, glass appearance and visual editor.

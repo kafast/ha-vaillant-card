@@ -118,7 +118,7 @@ HACS verwaltet die JavaScript-Ressource normalerweise selbst. Fehlt sie unter **
 
    | Feld | Wert |
    | --- | --- |
-   | URL | `/local/vaillant-app-card.js?v=1.4.0` |
+   | URL | `/local/vaillant-app-card.js?v=1.7.0` |
    | Ressourcentyp | JavaScript-Modul |
 
 4. Das Frontend neu laden.
@@ -133,7 +133,7 @@ In die vorhandene Ressourcenliste eintragen:
 ```yaml
 lovelace:
   resources:
-    - url: /local/vaillant-app-card.js?v=1.4.0
+    - url: /local/vaillant-app-card.js?v=1.7.0
       type: module
 ```
 
@@ -260,7 +260,7 @@ Beschriftung und Farben lassen sich im visuellen Karteneditor einstellen. Für d
 | `zone` | Ganzzahl | automatisch/Auswahl | Technischer Index der Heizzone |
 | `circuit` | Ganzzahl | automatisch/Auswahl | Technischer Index des Heizkreises |
 | `water` | Ganzzahl | automatisch/Auswahl | Technischer Index des Warmwasserspeichers |
-| `energy_device_id` | String | automatisch/Auswahl | HA-Geräte-ID des Energiegeräts |
+| `energy_device_id` | String | automatisch/Auswahl | HA-Geräte-ID für Energie, interne Leistung und Betriebsdiagnose |
 | `entities` | Objekt | `{}` | Einzelne Entitätszuordnungen überschreiben |
 
 ## Einzelne Widgets und Bedienrechte
@@ -280,7 +280,9 @@ Die vollständige Karte bleibt der Standard. Mit `view` lassen sich ihre Bereich
 | `quick_actions` | Warmwasser-Boost, Stoßlüften und Abwesenheit |
 | `energy` | Energieübersicht mit Diagnose fehlender Werte |
 | `efficiency` | Einzelne Effizienzanzeige aus der Integration |
-| `power` | Optionale Momentanleistung eines frei gewählten Sensors |
+| `power` | Momentanleistung; standardmäßig interner Sensor, optional andere Quelle |
+| `on_off_cycles` | Gemeldete Ein-/Ausschaltzyklen der Wärmepumpe |
+| `operation_time` | Gemeldete Betriebsstunden der Wärmepumpe |
 | `system` | Vollständige Anlagen- und Wartungsansicht |
 | `system_data` | Kompakte Anlagendaten: Vorlauf, Druck, Außentemperatur, Effizienz |
 
@@ -312,7 +314,9 @@ Optional entfernt `show_header: false` die Kartenüberschrift. Eigene `title`-Be
 
 ### Optionale momentane elektrische Leistung
 
-Im visuellen Editor **Leistungssensor · optional** auswählen oder den Sensor per YAML zuordnen:
+Standardmäßig erkennt die Karte den internen myVAILLANT-Sensor **Current Power** der ausgewählten Wärmepumpe automatisch. Eine zusätzliche Zuordnung ist nicht nötig. Die Hydraulikstation wird nicht als Ersatz für die Wärmepumpe verwendet. Bei mehreren möglichen Geräten **Wärmepumpengerät** auswählen oder `energy_device_id` festlegen.
+
+Für eine andere Quelle im visuellen Editor **Anderer Leistungssensor · optional** auswählen oder den Sensor per YAML zuordnen:
 
 ```yaml
 type: custom:vaillant-app-card
@@ -322,7 +326,7 @@ entities:
 
 Der Sensor kann aus myVAILLANT, einem separaten Stromzähler, MQTT oder einer anderen HA-Integration stammen. Vorhandene W-/kW-Sensoren werden im Editor vorgeschlagen; eine zukünftige Entitäts-ID kann auch manuell eingetragen werden. Die Beispiel-ID später durch den eigenen Sensor ersetzen.
 
-Ohne `entities.power` bzw. mit `null` bleibt die optionale Anzeige ausgeblendet. Mit konfiguriertem Sensor erscheint sie in Übersicht, Energie- und Anlagenansicht sowie im Anlagendaten-Widget. Die kompakte Übersicht priorisiert dann Leistung und Wasserdruck; die Vorlauftemperatur bleibt in der vollständigen Anlagenansicht erhalten. Zum Ausblenden das Sensorfeld leeren; andere Entitätszuordnungen bleiben bestehen.
+Ohne `entities.power` wird automatisch die interne Quelle verwendet. Fehlt ein passender Sensor, bleibt die optionale Anzeige in der vollständigen Karte ausgeblendet. `entities.power: null` deaktiviert die automatische Leistungsanzeige ausdrücklich. Mit vorhandener Zuordnung erscheint sie in Übersicht, Energie- und Anlagenansicht sowie im Anlagendaten-Widget. Die kompakte Übersicht priorisiert dann Leistung und Wasserdruck; die Vorlauftemperatur bleibt in der vollständigen Anlagenansicht erhalten. Ein leeres Sensorfeld kehrt zur internen Quelle zurück; andere Entitätszuordnungen bleiben bestehen. Eine ausdrücklich gewählte andere Quelle hat auch bei Nichtverfügbarkeit Vorrang; es erfolgt kein stiller Wechsel des Messpunkts.
 
 Die Einheit des Sensors muss **W** oder **kW** sein. Die Karte rechnet für die Darstellung um und erhält einen echten Nullwert. Fehlende, nicht verfügbare, nicht numerische oder mit falscher Einheit gelieferte Werte erscheinen als „—“, nicht als 0. Ein Sensor in A, Wh oder kWh ist kein Sensor für momentane Leistung. Aus dem optionalen Wert werden keine Energiesummen oder COP-Werte berechnet. Die Aktualisierung folgt der jeweiligen Sensorintegration; die Karte fragt den Sensor nicht zusätzlich ab.
 
@@ -336,7 +340,27 @@ entities:
   power: sensor.example_heat_pump_power
 ```
 
-Das einzelne Leistungs-Widget benötigt keinen Zugriff auf die myVAILLANT-Registrierung. Solange der Sensor noch nicht verfügbar ist, zeigt es einen entsprechenden Hinweis. Andere Widgets und die vollständige Karte verwenden weiterhin ihre übliche automatische Zuordnung.
+Für die interne Quelle den `entities`-Abschnitt im Widget weglassen; die automatische Erkennung liest dann die myVAILLANT-Registrierung. Nur mit ausdrücklich zugeordnetem externem Leistungssensor benötigt das einzelne Leistungs-Widget keinen Registrierungszugriff. Solange der Sensor noch nicht verfügbar ist, zeigt es einen entsprechenden Hinweis.
+
+### Ein-/Ausschaltzyklen und Betriebsstunden
+
+**On/Off Cycles** und **Operation Time** werden automatisch von derselben ausgewählten Wärmepumpe erkannt. Sie erscheinen unter **Anlage → Wärmepumpenbetrieb** und im Anlagendaten-Widget. Zähler der Hydraulikstation werden nicht in die Werte der Wärmepumpe gemischt. Die Karte zeigt die von der Integration gemeldeten Gesamtwerte; sie berechnet daraus keine Tageszähler. Operation Time wird von myVAILLANT bereits in Stunden bereitgestellt und nicht erneut durch 60 geteilt.
+
+Einzelne Widgets:
+
+```yaml
+type: custom:vaillant-app-card
+view: on_off_cycles
+control_mode: read_only
+```
+
+```yaml
+type: custom:vaillant-app-card
+view: operation_time
+control_mode: read_only
+```
+
+Manuelle Ausnahmen sind über `entities.on_off_cycles` und `entities.operation_time` möglich. Fehlende oder deaktivierte Sensoren liefern keine Werte; gegebenenfalls benötigt die Integration ihre Option für Echtzeitstatistiken. Die Karte aktiviert weder Integrationsoptionen noch deaktivierte Entitäten selbst.
 
 ### Anzeigen oder bedienen
 
@@ -417,7 +441,7 @@ entities:
   outdoor: sensor.example_outdoor_temperature
 ```
 
-Lokale Zuordnungen unter `entities` haben Vorrang vor der automatischen Erkennung. `null` deaktiviert die betreffende Zuordnung; das zugehörige Anzeigeelement wird dadurch nicht automatisch ausgeblendet.
+Lokale Zuordnungen unter `entities` haben Vorrang vor der automatischen Erkennung. `null` deaktiviert die betreffende Zuordnung; das zugehörige Anzeigeelement bleibt normalerweise sichtbar. Die optionale Leistungsanzeige wird bei deaktivierter Zuordnung ausgeblendet.
 
 <details>
 <summary>Alle Schlüssel für Entitätszuordnungen</summary>
@@ -436,7 +460,8 @@ Lokale Zuordnungen unter `entities` haben Vorrang vor der automatischen Erkennun
 | Umweltertrag | `environment_heating`, `environment_water` |
 | Erzeugte Wärme | `heat_heating`, `heat_water` |
 | Hydraulikstation | `hydraulic_electric`, `hydraulic_heat` |
-| Momentane elektrische Leistung | `power` (optional; manuell gewählter Sensor) |
+| Momentane elektrische Leistung | `power` (automatisch intern; optional andere Quelle) |
+| Wärmepumpenbetrieb | `on_off_cycles`, `operation_time` |
 | Effizienz und Firmware | `efficiency`, `firmware`, `firmware_update` |
 
 Die Werte sind die jeweiligen Entitäts-IDs aus der eigenen HA-Installation. Private Zuordnungen gehören ins lokale Dashboard-YAML, nicht in öffentliche Beispiele.
@@ -486,6 +511,14 @@ Ein erfolgreich gesendeter Befehl bestätigt noch nicht die Änderung an der Anl
 **HACS:** Die Karte in HACS öffnen und eine angebotene Aktualisierung herunterladen. Falls nötig, die Repository-Informationen aktualisieren und **erneut herunterladen**. Danach das Frontend neu laden.
 
 **Manuell:** Die JavaScript-Datei ersetzen und den Versionsparameter der Ressourcen-URL anpassen, damit der Browser die neue Datei lädt.
+
+**Neu in 1.7.0:** Interner Leistungssensor als automatischer Standard, andere Quelle weiterhin optional. Ein-/Ausschaltzyklen und Betriebsstunden mit automatischer Zuordnung und einzelnen Widgets.
+
+**Neu in 1.6.0:** Frei wählbarer W-/kW-Leistungssensor und einzelnes Leistungs-Widget.
+
+**Neu in 1.5.0:** Einzel-Widgets, Anzeige-/Admin-Modus, Bereichsregeln und Auswahl im visuellen Editor.
+
+**Neu in 1.4.1:** Energiezuordnung ohne HA-Gerätepräfix, Heizkreiszuordnung aus dem Gerätenamen sowie klarere Offline- und Verfügbarkeitsdiagnose.
 
 **Neu in 1.4.0:** Englische Quelltexte, deutsche und englische Oberfläche, Sprachauswahl im Editor und zweisprachige Dokumentation. Hinweise zur KI-Erstellung und zu Testgrenzen sind oben hervorgehoben.
 

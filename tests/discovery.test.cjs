@@ -332,3 +332,41 @@ test('power sensor editor preserves other mappings, allows future sensors and re
   const valid=event;e._change({target:{dataset:{key:'entities.power'},value:'switch.not_a_sensor'}});assert.equal(event,valid);assert.ok(e._error);
   e._change({target:{dataset:{key:'entities.power'},value:''}});assert.equal(event.detail.config.entities.power,undefined);assert.equal(event.detail.config.entities.room,'sensor.example_room');
 });
+
+function addTelemetry(f,device='example-outer',token='outer'){
+  const ids={};
+  for(const [key,suffix] of Object.entries({power:'current_power',on_off_cycles:'on_off_cycles',operation_time:'operation_time'}))ids[key]=f.add('sensor',`device_${token}_${suffix}`,'Renamed diagnostic',`${token}_${suffix}`,{device_id:device});
+  return ids;
+}
+
+test('discovers internal power, cycles and operating hours by unique ID on the selected heat pump',()=>{
+  const {resolve}=environment(),f=fixture(),ids=addTelemetry(f);const hydraulic=addTelemetry(f,'example-hydraulic','hydraulic');
+  const r=resolve(f.registry,{});
+  for(const [key,id] of Object.entries(ids)){assert.equal(r.ids[key],id);assert.notEqual(r.ids[key],hydraulic[key]);}
+  assert.equal(r.selected.energy_device,'example-outer');
+  const override=resolve(f.registry,{entities:{power:'sensor.external_power'}});assert.equal(override.ids.power,'sensor.external_power');assert.equal(override.ids.on_off_cycles,ids.on_off_cycles);
+  assert.equal(resolve(f.registry,{entities:{power:null}}).ids.power,null);
+});
+
+test('diagnostics discovery works without energy sensors and does not guess between heat pumps',()=>{
+  const {resolve}=environment(),f=fixture();
+  const remaining=f.registry.entities.filter(e=>!/(Consumed Electrical Energy)/i.test(e.original_name));f.registry.entities.splice(0,f.registry.entities.length,...remaining);
+  const first=addTelemetry(f),second=addTelemetry(f,'example-second-pump','second');f.registry.devices.push({id:'example-second-pump',model:'aroTHERM plus'});
+  let r=resolve(f.registry,{});assert.equal(r.ids.power,null);assert.equal(r.ids.on_off_cycles,null);assert.equal(r.choices.energy_device.length,2);
+  r=resolve(f.registry,{energy_device_id:'example-second-pump'});for(const [key,id] of Object.entries(second))assert.equal(r.ids[key],id);
+  r=resolve(f.registry,{energy_device_id:'example-outer'});assert.equal(r.ids.power,first.power);
+});
+
+test('automatic standalone power widget reads the registry unless a manual source is set',async()=>{
+  const {Card}=environment(),f=fixture(),ids=addTelemetry(f),c=new Card();let reads=0;
+  c.setConfig({view:'power',control_mode:'read_only'});c.hass={connection:{},states:{[ids.power]:{state:'416',attributes:{unit_of_measurement:'W'}}},callWS:async({type})=>{reads++;return type.includes('entity_registry')?f.registry.entities:f.registry.devices;}};
+  await c._discoveryPromise;assert.equal(reads,2);assert.equal(c._ids.power,ids.power);assert.match(c.shadowRoot.innerHTML,/416\.0/);
+  c.setConfig({view:'power',entities:{power:'sensor.external_power'}});await c._discoveryPromise;assert.equal(reads,2);assert.equal(c._ids.power,'sensor.external_power');
+});
+
+test('cycles and hours render as reported, without converting hours a second time',()=>{
+  const {c}=controlCard({entities:{on_off_cycles:'sensor.cycles',operation_time:'sensor.hours'}});
+  c.hass={...c.hass,states:{'sensor.cycles':{state:'562',attributes:{}},'sensor.hours':{state:'1112',attributes:{unit_of_measurement:'h'}}}};
+  assert.match(c._status(),/Heat pump operation/);assert.match(c._operationStats(),/562/);assert.match(c._operationStats(),/1,112\.0 h/);
+  for(const view of ['on_off_cycles','operation_time']){c.setConfig({view,auto_discover:false,control_mode:'read_only',entities:{on_off_cycles:'sensor.cycles',operation_time:'sensor.hours'}});assert.doesNotMatch(c.shadowRoot.innerHTML,/<nav class="footer"/);assert.match(c.shadowRoot.innerHTML,view==='on_off_cycles'?/562/:/1,112\.0 h/);}
+});

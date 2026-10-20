@@ -1,4 +1,4 @@
-/* Vaillant App Card v1.6.0 — independent custom card, no external dependencies.
+/* Vaillant App Card v1.7.0 — independent custom card, no external dependencies.
  * AI-generated and AI-assisted experimental code. Tests use simulated data;
  * operation on a physical heating system has not been validated. See README. */
 (() => {
@@ -6,10 +6,19 @@
   const REGISTRY_CACHE = new WeakMap();
   const COLOR_SCHEMES = {vaillant:'Vaillant',home_assistant:'Home Assistant',glass:'Glass',graphite:'Graphite',ocean:'Ocean'};
   // German translations; all source messages and identifiers use English.
-  const WIDGET_VIEWS = {dashboard:'Full dashboard',overview:'Overview',heating:'Heating',hot_water:'Hot water',quick_actions:'Quick actions',energy:'Energy',efficiency:'Energy efficiency',power:'Current electrical power',system:'System',system_data:'System data'};
+  const WIDGET_VIEWS = {dashboard:'Full dashboard',overview:'Overview',heating:'Heating',hot_water:'Hot water',quick_actions:'Quick actions',energy:'Energy',efficiency:'Energy efficiency',power:'Current electrical power',on_off_cycles:'On/off cycles',operation_time:'Operating hours',system:'System',system_data:'System data'};
   const CONTROL_MODES = {full:'View and control',admin:'Administrators only',read_only:'View only'};
   const CONTROL_GROUPS = ['heating','hot_water','quick_actions','settings'];
   const DE = {
+  "On/off cycles": "Ein-/Ausschaltzyklen",
+  "Operating hours": "Betriebsstunden",
+  "Heat pump operation": "Wärmepumpenbetrieb",
+  "Heat pump device": "Wärmepumpengerät",
+  "No matching sensor is available.": "Kein passender Sensor verfügbar.",
+  "Power sensor override · optional": "Anderer Leistungssensor · optional",
+  "Default: internal myVAILLANT power sensor. Enter a W/kW sensor to override it; clear the field to use automatic discovery again.": "Standard: interner myVAILLANT-Leistungssensor. Für eine andere Quelle einen W-/kW-Sensor eintragen; ein leeres Feld verwendet wieder die automatische Zuordnung.",
+  "No internal power sensor found. Enable it in the integration or select another sensor in the card editor.": "Kein interner Leistungssensor gefunden. In der Integration aktivieren oder im Karteneditor einen anderen Sensor wählen.",
+
   "Current electrical power": "Momentane elektrische Leistung",
   "Power sensor · optional": "Leistungssensor · optional",
   "Use a sensor in W or kW. Leave empty to hide the optional power display.": "Einen Sensor in W oder kW auswählen. Ohne Sensor bleibt die optionale Leistungsanzeige ausgeblendet.",
@@ -235,7 +244,7 @@
     'operating_state','circuit_state','boost','ventilation','away','heating_curve','veto_duration',
     'efficiency','firmware','firmware_update','heating_calendar','water_calendar','circulation_calendar',
     'electric_heating','electric_water','environment_heating','environment_water','heat_heating',
-    'heat_water','hydraulic_electric','hydraulic_heat','power'];
+    'heat_water','hydraulic_electric','hydraulic_heat','power','on_off_cycles','operation_time'];
   const emptyIds = () => Object.fromEntries(ENTITY_KEYS.map(k => [k, null]));
   const uid = e => String(e?.unique_id || '').replace(/^mypyllant /, 'mypyllant_');
   const domain = e => String(e?.entity_id || '').split('.')[0];
@@ -362,14 +371,22 @@
     };
     // Energy unique IDs contain opaque indices, not the energy type. Use immutable original integration names.
     const energy = entries.filter(e => domain(e)==='sensor' && e.device_id && Object.values(energyPatterns).some(p=>p.test(e.original_name || '')));
-    const deviceIds = [...new Set(energy.map(e => e.device_id))];
+    // System-device diagnostics use stable unique-ID suffixes, independently
+    // of energy support and translated or renamed entity display names.
+    const telemetryFields={power:'current_power',on_off_cycles:'on_off_cycles',operation_time:'operation_time'};
+    const telemetry=entries.filter(e=>domain(e)==='sensor'&&e.device_id&&/^device_.+_(?:current_power|on_off_cycles|operation_time)$/.test(uid(e).slice(prefix.length)));
+    const deviceIds = [...new Set([...energy,...telemetry].map(e => e.device_id))];
     const getDevice = id => registry.devices.find(d => d.id===id);
-    const isHydraulic = id => /hydraulic|hydraulik/i.test(`${getDevice(id)?.model || ''} ${getDevice(id)?.name || ''} ${energy.find(e=>e.device_id===id)?.original_name || ''}`);
+    const isHydraulic = id => /hydraulic|hydraulik/i.test(`${getDevice(id)?.model || ''} ${getDevice(id)?.name || ''} ${[...energy,...telemetry].filter(e=>e.device_id===id).map(e=>e.original_name || '').join(' ')}`);
     const outer = deviceIds.filter(id => !isHydraulic(id));
-    choices.energy_device = outer.map(id => ({value:id,label:getDevice(id)?.name_by_user || getDevice(id)?.name || 'Energy device',disabled:false}));
+    choices.energy_device = outer.map(id => ({value:id,label:getDevice(id)?.name_by_user || getDevice(id)?.name || 'Heat pump device',disabled:false}));
     const energyDevice = choose(choices.energy_device,config.energy_device_id ?? selected.energy_device);
     if (energyDevice) {
       selection.energy_device=energyDevice.value;
+      for(const [key,suffix] of Object.entries(telemetryFields)){
+        const candidates=telemetry.filter(e=>e.device_id===energyDevice.value&&uid(e).endsWith('_'+suffix));
+        ids[key]=(only(candidates.filter(e=>!e.disabled_by)) || only(candidates))?.entity_id || null;
+      }
       for (const [key,pattern] of Object.entries(energyPatterns)) {
         const candidates=energy.filter(e=>e.device_id===energyDevice.value && pattern.test(e.original_name || ''));
         ids[key]=(only(candidates.filter(e=>!e.disabled_by)) || only(candidates))?.entity_id || null;
@@ -485,7 +502,7 @@ ha-card.light[data-color-scheme="ocean"]{
  ha-card[data-color-scheme="glass"]{--va-bg:#182333;--va-panel:#202f42;--va-raised:#293c52}
  ha-card.light[data-color-scheme="glass"]{--va-bg:#f4f7fc;--va-panel:#fff;--va-raised:#eaf0f7}
 }
-.hint+.quick-body{margin-top:12px}.target-reading{padding:12px 16px;border-radius:10px;background:var(--va-raised);font-size:25px;text-align:center;font-variant-numeric:tabular-nums}.target-reading span{font-size:14px;color:var(--va-sub)}.energy-diagnostics{margin:14px 0;overflow-wrap:anywhere}.energy-diagnostics code{font-size:10px}div.row,div.stat,div.quick-action{cursor:default}.quick-body+p{margin-top:10px}
+.hint+.quick-body{margin-top:12px}.status-grid+.power-panel{margin-top:14px}.target-reading{padding:12px 16px;border-radius:10px;background:var(--va-raised);font-size:25px;text-align:center;font-variant-numeric:tabular-nums}.target-reading span{font-size:14px;color:var(--va-sub)}.energy-diagnostics{margin:14px 0;overflow-wrap:anywhere}.energy-diagnostics code{font-size:10px}div.row,div.stat,div.quick-action{cursor:default}.quick-body+p{margin-top:10px}
 ha-card:not([data-view="dashboard"]) .top{padding:18px 18px 14px}ha-card:not([data-view="dashboard"]) .title{font-size:20px}ha-card:not([data-view="dashboard"]) .eyebrow{display:none}ha-card[data-view="system_data"] .stat:nth-child(n+3){display:block}ha-card[data-view="quick_actions"] .quick-body{grid-template-columns:repeat(3,minmax(0,1fr))}ha-card[data-view="quick_actions"] .quick-action{flex-direction:column;text-align:center;min-height:88px}
   `;
   class VaillantAppCard extends HTMLElement {
@@ -502,7 +519,7 @@ ha-card:not([data-view="dashboard"]) .top{padding:18px 18px 14px}ha-card:not([da
       for(const [key,id] of Object.entries(config.entities || {})) {
         if(!ENTITY_KEYS.includes(key) || (id!==null && (typeof id!=='string' || !/^[a-z_]+\.[a-z0-9_]+$/.test(id)))) throw new Error('Invalid entity mapping: '+key);
       }
-      if(config.entities?.power && !config.entities.power.startsWith('sensor.'))throw new Error('power must be a sensor entity.');
+      for(const key of ['power','on_off_cycles','operation_time'])if(config.entities?.[key]&&!config.entities[key].startsWith('sensor.'))throw new Error(key+' must be a sensor entity.');
       for(const key of ['zone','circuit','water']) if(config[key]!==undefined && !/^\d+$/.test(String(config[key]))) throw new Error(key+' must be a non-negative index.');
       if(config.color_scheme!==undefined && !Object.prototype.hasOwnProperty.call(COLOR_SCHEMES,config.color_scheme)) throw new Error('Unknown color scheme: '+String(config.color_scheme));
       for(const key of ['accent_color','heating_color']) if(config[key]!==undefined && !isHexColor(config[key])) throw new Error(key+' must be a hex color, for example #03a9f4.');
@@ -535,7 +552,7 @@ ha-card:not([data-view="dashboard"]) .top{padding:18px 18px 14px}ha-card:not([da
     _language(){return getLanguage(this._config,this._hass);}
     _t(message){return translate(message,this._language());}
     _format(value,digits=1){return formatNumber(value,digits,this._language());}
-    getCardSize(){return ['heating','hot_water','quick_actions','system_data','efficiency','power'].includes(this._config?.view)?4:this._page==='home'?10:13;}
+    getCardSize(){return ['heating','hot_water','quick_actions','system_data','efficiency','power','on_off_cycles','operation_time'].includes(this._config?.view)?4:this._page==='home'?10:13;}
     getGridOptions(){return {columns:this._config?.view==='dashboard'?'full':12,min_columns:6,rows:'auto'};}
     _permits(mode){return mode==='full'||(mode==='admin'&&this._hass?.user?.is_admin===true);}
     _mayControl(group){return this._permits(this._config?.control_mode || 'full')&&this._permits(this._config?.control_modes?.[group] || 'full');}
@@ -555,6 +572,8 @@ ha-card:not([data-view="dashboard"]) .top{padding:18px 18px 14px}ha-card:not([da
         case 'quick_actions':return this._offlineNotice()+this._quickActions();
         case 'energy':return this._energy();
         case 'power':return this._powerPanel();
+        case 'on_off_cycles':return this._counterPanel('on_off_cycles','On/off cycles',0);
+        case 'operation_time':return this._counterPanel('operation_time','Operating hours',1);
         case 'efficiency':return `<section class="energy-total secondary"><small>${icon('leaf')}Energy efficiency</small><strong>${this._format(this._num('efficiency'),2)}</strong><p>Reported value for heating and hot water</p></section>`;
         case 'system':return this._status();
         case 'system_data':return this._systemData();
@@ -566,7 +585,7 @@ ha-card:not([data-view="dashboard"]) .top{padding:18px 18px 14px}ha-card:not([da
     disconnectedCallback(){this._resetPending();}
     _resetPending() { for(const timer of Object.values(this._pendingTimers || {})) clearTimeout(timer); this._pendingTemps={}; this._pendingTimers={}; }
     async _discover(force=false) {
-      if (!this._config || !this._hass || this._config.auto_discover===false || this._config.view==='power') return;
+      if (!this._config || !this._hass || this._config.auto_discover===false || (this._config.view==='power'&&Object.prototype.hasOwnProperty.call(this._config.entities || {},'power'))) return;
       const token=++this._discoveryToken;
       this._discoveryBusy=true; this._discoveryError=null; this._render();
       try {
@@ -589,8 +608,8 @@ ha-card:not([data-view="dashboard"]) .top{padding:18px 18px 14px}ha-card:not([da
       this._signature=null;
     }
     _discoveryPanel() {
-      if(this._config.auto_discover===false||this._config.view==='power')return '';
-      const titles={system:'System',zone:'Heating zone',water:'Hot-water tank',circuit:'Heating circuit',energy_device:'Energy device'};
+      if(this._config.auto_discover===false||(this._config.view==='power'&&Object.prototype.hasOwnProperty.call(this._config.entities || {},'power')))return '';
+      const titles={system:'System',zone:'Heating zone',water:'Hot-water tank',circuit:'Heating circuit',energy_device:'Heat pump device'};
       const pinned={system:'system_id',zone:'zone',water:'water',circuit:'circuit',energy_device:'energy_device_id'};
       const selectors=Object.entries(this._choices||{}).filter(([key,items])=>items.length>1 && this._config[pinned[key]]===undefined).map(([key,items])=>
         `<label class="row"><span>${this._t(titles[key])}</span><select data-discovery="${key}" aria-label="${this._t(titles[key])} selection" ${this._busy?'disabled':''}><option value="" disabled ${this._selected[key]===undefined?'selected':''}>Select an option</option>${items.map(i=>`<option data-no-localize value="${esc(i.value)}" ${String(this._selected[key])===String(i.value)?'selected':''}>${esc(key==='circuit'?this._t(i.label):i.label)}${i.disabled?this._t(' (disabled)'):''}</option>`).join('')}</select></label>`).join('');
@@ -643,7 +662,7 @@ ha-card:not([data-view="dashboard"]) .top{padding:18px 18px 14px}ha-card:not([da
       return watts===null?{value:'—',unit:''}:Math.abs(watts)>=1000?{value:this._format(watts/1000,2),unit:'kW'}:{value:this._format(watts,1),unit:'W'};
     }
     _powerReason(){
-      if(!this._ids.power)return 'Configure a power sensor in the card editor.';
+      if(!this._ids.power)return 'No internal power sensor found. Enable it in the integration or select another sensor in the card editor.';
       if(!this._ok('power'))return this._availability('power');
       if(this._num('power')===null)return 'No numeric reading';
       return 'Unsupported power unit (use W or kW).';
@@ -677,7 +696,7 @@ ha-card:not([data-view="dashboard"]) .top{padding:18px 18px 14px}ha-card:not([da
       return `<${tag} class="stat" ${interactive?`data-more="${esc(key)}"`:''}><small>${icon(ic)}${esc(label)}</small><strong>${key==='power'?`${this._powerReading().value} ${this._powerReading().unit}`:this._formatSensor(key,digits)}</strong></${tag}>`;
     }
     _quickActions(){return `<section class="surface"><div class="section">Quick actions</div>${this._accessLabel('quick_actions')?`<p class="hint">${this._accessLabel('quick_actions')}</p>`:''}<div class="quick-body">${this._toggle('Hot-water boost','boost','water')}${this._toggle('Ventilation boost','ventilation','wind')}${this._toggle('Away','away','home')}</div></section>`;}
-    _systemData(){return `<section class="surface"><div class="section">System data</div><div class="overview-stats">${this._ids.power?this._stat('Current electrical power','power','energy'):this._stat('Flow temperature','flow','heat')}${this._stat('Water pressure','pressure','pressure')}${this._ids.power?this._stat('Flow temperature','flow','heat'):''}${this._stat('Outside','outdoor','temp')}${this._stat('Efficiency','efficiency','leaf',2)}</div>${this._config.view==='dashboard'?`<button class="aside-link" data-page="status">All system data${icon('arrow')}</button>`:''}</section>`;}
+    _systemData(){return `<section class="surface"><div class="section">System data</div><div class="overview-stats">${this._ids.power?this._stat('Current electrical power','power','energy'):this._stat('Flow temperature','flow','heat')}${this._stat('Water pressure','pressure','pressure')}${this._ids.power?this._stat('Flow temperature','flow','heat'):''}${this._stat('Outside','outdoor','temp')}${this._stat('Efficiency','efficiency','leaf',2)}${this._ids.on_off_cycles?this._stat('On/off cycles','on_off_cycles','clock',0):''}${this._ids.operation_time?this._stat('Operating hours','operation_time','clock',1):''}</div>${this._config.view==='dashboard'?`<button class="aside-link" data-page="status">All system data${icon('arrow')}</button>`:''}</section>`;}
     _home(){return `${this._offlineNotice()}<div class="overview">
       <div class="control-grid">${this._controlPanel(false)}${this._controlPanel(true)}</div>
       <aside class="overview-aside">${this._quickActions()}${this._systemData()}</aside></div>`;}
@@ -715,13 +734,15 @@ ha-card:not([data-view="dashboard"]) .top{padding:18px 18px 14px}ha-card:not([da
         <section class="surface"><div class="section">Hydraulic station · separate</div>${this._energyRow('Heating electrical energy','hydraulic_electric','energy')}${this._energyRow('Heating heat output','hydraulic_heat','heat')}</section>
       </div><p class="hint">Period and freshness depend on the integration. The hydraulic station is shown separately.</p>`;}
     _energyDiagnostics(){const missing=this._energyKeys().filter(k=>this._energyValue(k)===null);return missing.length?`<section class="surface energy-diagnostics"><div class="section">Energy entity diagnostics</div>${missing.map(k=>`<div class="hint"><code>${esc(k)}</code>: ${esc(this._t(this._availability(k)))}${this._ids[k]?`<br><code>${esc(this._ids[k])}</code>`:''}</div>`).join('')}</section>`:'';}
+    _counterPanel(key,label,digits){return `<section class="energy-total secondary"><small>${icon('clock')}${label}</small><strong>${this._formatSensor(key,digits)}</strong>${!this._ok(key)?'<p>No matching sensor is available.</p>':''}</section>`;}
+    _operationStats(){return this._ids.on_off_cycles||this._ids.operation_time?`<section class="surface"><div class="section">Heat pump operation</div>${this._metric('On/off cycles','on_off_cycles','clock',0)}${this._metric('Operating hours','operation_time','clock',1)}</section>`:'';}
     _status(){const required=['climate','water_heater','online','trouble','outdoor','flow','pressure'];const missing=required.filter(k=>!this._ok(k));return `
       <div class="page-heading"><h2>System & maintenance</h2><small>System overview</small></div><div class="status-grid">
         <section class="surface"><div class="section">System status</div>${this._banner()}${this._row('Cloud connection','online','info',this._state('online')==='on'?'Connected':this._state('online')==='off'?'Disconnected':'Unavailable')}${this._row('Operating state','operating_state','settings')}${this._row(this._circuitLabel(),'circuit_state','heat')}</section>
         <section class="surface"><div class="section">System data</div>${this._metric('Water pressure','pressure','pressure')}${this._metric('Flow temperature '+this._circuitLabel(),'flow','heat')}${this._metric('Target flow temperature','flow_target','temp')}${this._metric('System flow temperature','system_flow','temp')}</section>
         <section class="surface"><div class="section">Temperatures</div>${this._metric('Room temperature','room','home')}${this._metric('Hot-water tank','tank','water')}${this._metric('Outdoor temperature','outdoor','temp')}</section>
         <section class="surface"><div class="section">Maintenance</div>${this._row('Fault details','trouble','info',this._state('trouble')==='on'?'Fault':this._state('trouble')==='off'?'None reported':'Unavailable')}${this._row('Firmware','firmware','info')}${this._row('Firmware update','firmware_update','info',this._state('firmware_update')==='on'?'Available':this._state('firmware_update')==='off'?'None reported':'Unavailable')}</section>
-      </div>${this._ids.power?this._powerPanel():''}${this._energyDiagnostics()}${missing.length?`<div class="availability"><b>Missing or unavailable entities</b><br>${missing.map(k=>`<code>${esc(this._ids[k] || k+' (not assigned)')}</code>`).join('<br>')}<br>Enable them in entity settings if needed.</div>`:''}`;
+      ${this._operationStats()}</div>${this._ids.power?this._powerPanel():''}${this._energyDiagnostics()}${missing.length?`<div class="availability"><b>Missing or unavailable entities</b><br>${missing.map(k=>`<code>${esc(this._ids[k] || k+' (not assigned)')}</code>`).join('<br>')}<br>Enable them in entity settings if needed.</div>`:''}`;
     }
     _render(){
       if(!this._config||!this._hass)return;
@@ -808,7 +829,7 @@ ha-card:not([data-view="dashboard"]) .top{padding:18px 18px 14px}ha-card:not([da
         </style><div class="fields" lang="${getLanguage(this._config,this._hass)}">
         ${select('view','Widget',WIDGET_VIEWS,this._config.view || 'dashboard')}${select('control_mode','Controls',CONTROL_MODES,this._config.control_mode || 'full')}<details><summary>Section controls</summary><div class="pair">${CONTROL_GROUPS.map(group=>select('control_modes.'+group,({heating:'Heating',hot_water:'Hot water',quick_actions:'Quick actions',settings:'Settings'})[group],{'':'Use card setting',...CONTROL_MODES},this._config.control_modes?.[group] || '')).join('')}</div></details><p>Card controls only; Home Assistant permissions still apply.</p>
         <div class="pair">${field('title','Title','Heat pump')}${field('zone_name','Heating name','Heating')}</div>
-        <label>Power sensor · optional<input data-key="entities.power" value="${esc(this._config.entities?.power || '')}" placeholder="sensor.example_heat_pump_power" list="power-sensors" spellcheck="false"></label><datalist id="power-sensors">${powerSensors.map(id=>`<option value="${esc(id)}"></option>`).join('')}</datalist><p>Use a sensor in W or kW. Leave empty to hide the optional power display.</p>
+        <label>Power sensor override · optional<input data-key="entities.power" value="${esc(this._config.entities?.power || '')}" placeholder="sensor.example_heat_pump_power" list="power-sensors" spellcheck="false"></label><datalist id="power-sensors">${powerSensors.map(id=>`<option value="${esc(id)}"></option>`).join('')}</datalist><p>Default: internal myVAILLANT power sensor. Enter a W/kW sensor to override it; clear the field to use automatic discovery again.</p>
         <label>Language<select data-key="language">${[['auto','Automatic (Home Assistant)'],['de','German'],['en','English']].map(([value,label])=>`<option value="${value}" ${value===(this._config.language || 'auto')?'selected':''}>${label}</option>`).join('')}</select></label>
         <label>Color scheme<select data-key="color_scheme">${Object.entries(COLOR_SCHEMES).map(([key,name])=>`<option value="${key}" ${key===(this._config.color_scheme || DEFAULT_COLOR_SCHEME)?'selected':''}>${name}</option>`).join('')}</select></label>
         <p>Home Assistant uses your active theme colors. Glass uses translucent surfaces; a dashboard background makes the effect more visible. Light/dark mode follows Home Assistant.</p>
