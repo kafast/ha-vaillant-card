@@ -108,3 +108,19 @@ test('temperature actions use discovered entity IDs and reported limits',async()
   await c._discoveryPromise;c._page='heating';await c._click({target:{closest:()=>({disabled:false,dataset:{step:'1'},hasAttribute:()=>false})}});
   assert.equal(calls[0][0],'climate');assert.equal(calls[0][1],'set_temperature');assert.equal(calls[0][2].entity_id,f.ids.climate);assert.equal(calls[0][2].temperature,21.5);
 });
+test('overview controls keep heating and hot-water targets and confirmations separate',async()=>{
+  const {Card}=environment();const f=fixture();const calls=[];const c=new Card();c.setConfig({});
+  const states={
+    [f.ids.climate]:{state:'auto',attributes:{supported_features:1,temperature:21,current_temperature:20,min_temp:7,max_temp:35,target_temp_step:.5}},
+    [f.ids.water_heater]:{state:'Time Controlled',attributes:{supported_features:3,temperature:50,current_temperature:48,min_temp:35,max_temp:70}}
+  };
+  c.hass={connection:{},states,callWS:async({type})=>type.includes('entity_registry')?f.registry.entities:f.registry.devices,callService:async(...args)=>calls.push(args)};
+  await c._discoveryPromise;c._page='home';
+  const step=control=>({target:{closest:()=>({disabled:false,dataset:{step:'1',control},hasAttribute:()=>false})}});
+  await c._click(step('water_heater'));await c._click(step('climate'));
+  assert.equal(calls[0][2].entity_id,f.ids.water_heater);assert.equal(calls[0][2].temperature,51);
+  assert.equal(calls[1][2].entity_id,f.ids.climate);assert.equal(calls[1][2].temperature,21.5);
+  assert.equal(c._target(true),51);assert.equal(c._target(false),21.5);assert.equal(c._page,'home');
+  states[f.ids.climate].attributes.temperature=21.5;
+  assert.equal(c._target(false),21.5);assert.equal(c._target(true),51);assert.ok(c._pendingTemps.water_heater);assert.equal(c._pendingTemps.climate,undefined);
+});
