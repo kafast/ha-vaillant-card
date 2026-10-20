@@ -1,0 +1,8 @@
+type: custom:vaillant-app-card
+title: Haus
+zone_name: Zone 1
+# Deine Entitäts-IDs sind bereits in der JavaScript-Datei hinterlegt.
+# Einzelne IDs lassen sich bei Bedarf hier überschreiben:
+# entities:
+#   climate: climate.haus_zone_1_circuit_0_climate
+#   water_heater: water_heater.haus_domestic_hot_water_0
