@@ -23,7 +23,7 @@ Opens this repository in HACS on your Home Assistant instance. HACS must already
 
 ![Desktop layout with heating, hot water, quick actions and system readings](docs/preview.jpg)
 
-*Screenshots use invented data and German UI labels. No physical heating system is connected. The card supports English and German.*
+*Screenshots show the default Home Assistant color scheme in light mode, using invented data and German UI labels. No physical heating system is connected. The card supports English and German.*
 
 <details>
 <summary>Tablet and phone previews</summary>

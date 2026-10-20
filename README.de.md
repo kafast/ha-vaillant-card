@@ -26,7 +26,7 @@ Die Karte erkennt passende Entitäten der [myVAILLANT-Integration](https://githu
 
 ![Desktop: Heizung und Warmwasser mit Schnellaktionen und Anlagendaten](docs/preview.jpg)
 
-*Desktop-Vorschau mit erfundenen Beispieldaten. Keine Verbindung zu einer echten Anlage.*
+*Desktop-Vorschau im Standardfarbstil Home Assistant und hellem Modus mit erfundenen Beispieldaten. Keine Verbindung zu einer echten Anlage.*
 
 <details>
 <summary>Tablet- und Smartphone-Vorschau</summary>
