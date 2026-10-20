@@ -10,11 +10,11 @@ function environment(){
     attachShadow(){this.shadowRoot={innerHTML:'',addEventListener(){}};}
     dispatchEvent(){return true;}
   }
-  const context={HTMLElement:Element,window:{},customElements:{get:k=>definitions.get(k),define:(k,v)=>definitions.set(k,v)},setTimeout:()=>0,clearTimeout(){},CustomEvent:class {}};
+  const context={HTMLElement:Element,window:{},customElements:{get:k=>definitions.get(k),define:(k,v)=>definitions.set(k,v)},setTimeout:()=>0,clearTimeout(){},CustomEvent:class {constructor(type,options){this.type=type;Object.assign(this,options);}}};
   vm.createContext(context);
   const source=fs.readFileSync(path.join(__dirname,'../vaillant-app-card.js'),'utf8');
   vm.runInContext(source.replace("  if(!customElements.get('vaillant-app-card'))","  window.testResolver=resolveEntities;\n  if(!customElements.get('vaillant-app-card'))"),context);
-  return {resolve:context.window.testResolver,Card:definitions.get('vaillant-app-card')};
+  return {resolve:context.window.testResolver,Card:definitions.get('vaillant-app-card'),Editor:definitions.get('vaillant-app-card-editor')};
 }
 function fixture(system='example-system',entityPrefix='example'){
   const entities=[];
@@ -123,4 +123,23 @@ test('overview controls keep heating and hot-water targets and confirmations sep
   assert.equal(c._target(true),51);assert.equal(c._target(false),21.5);assert.equal(c._page,'home');
   states[f.ids.climate].attributes.temperature=21.5;
   assert.equal(c._target(false),21.5);assert.equal(c._target(true),51);assert.ok(c._pendingTemps.water_heater);assert.equal(c._pendingTemps.climate,undefined);
+});
+test('color schemes retain the existing default and reject invalid style input',()=>{
+  const {Card}=environment();const c=new Card();c.setConfig({});assert.equal(c._config.color_scheme,'vaillant');
+  for(const color_scheme of ['vaillant','home_assistant','glass','graphite','ocean']){c.setConfig({color_scheme,accent_color:'#03a9f4',heating_color:'#f90'});assert.equal(c._config.color_scheme,color_scheme);}
+  assert.throws(()=>c.setConfig({color_scheme:'unknown'}));
+  for(const accent_color of ['red;display:none','#12345','#fff" onclick="alert(1)','var(--anything)'])assert.throws(()=>c.setConfig({accent_color}));
+});
+test('visual editor preserves existing entity mappings and optional settings',()=>{
+  const {Editor}=environment();const editor=new Editor();let event;
+  editor.dispatchEvent=e=>{event=e;return true;};
+  editor.setConfig({type:'custom:vaillant-app-card',entities:{room:'sensor.example_room'},zone:1});
+  editor._change({target:{dataset:{key:'color_scheme'},value:'glass'}});
+  assert.equal(event.type,'config-changed');assert.equal(event.detail.config.color_scheme,'glass');assert.equal(event.detail.config.entities.room,'sensor.example_room');assert.equal(event.detail.config.zone,1);
+  editor._change({target:{dataset:{key:'accent_color'},value:'#123456'}});assert.equal(event.detail.config.accent_color,'#123456');
+  editor._change({target:{dataset:{key:'accent_color'},value:''}});assert.equal(event.detail.config.accent_color,undefined);
+});
+test('invalid color in visual editor never emits a configuration change',()=>{
+  const {Editor}=environment();const editor=new Editor();let changes=0;editor.dispatchEvent=()=>{changes++;return true;};editor.setConfig({type:'custom:vaillant-app-card'});
+  editor._change({target:{dataset:{key:'accent_color'},value:'#fff;background:red'}});assert.equal(changes,0);assert.ok(editor._error);
 });

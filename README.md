@@ -41,6 +41,7 @@ Die Karte erkennt passende Entitäten der [myVAILLANT-Integration](https://githu
 - [Installation](#installation)
 - [Schnellstart](#schnellstart)
 - [Layout auf Handy, Tablet und Desktop](#layout-auf-handy-tablet-und-desktop)
+- [Farbstile und Themes](#farbstile-und-themes)
 - [Konfiguration](#konfiguration)
 - [Automatische Zuordnung](#automatische-zuordnung)
 - [Bedienung und Grenzen](#bedienung-und-grenzen)
@@ -64,7 +65,9 @@ Die Karte erkennt passende Entitäten der [myVAILLANT-Integration](https://githu
 - Auswahl bei mehreren Anlagen, Zonen, Warmwasserspeichern oder Energiegeräten.
 - Lokale YAML-Ausnahmen für einzelne Entitäten.
 - Layout nach verfügbarer Kartenbreite statt nach erkanntem Gerätetyp.
+- Fünf Farbstile: Home Assistant, Vaillant, Glas, Graphit und Ozean.
 - Automatischer Hell-/Dunkelmodus entsprechend Home Assistant.
+- Visueller Editor für Beschriftung, Farbstil und optionale Akzentfarben.
 
 ## Voraussetzungen
 
@@ -107,7 +110,7 @@ HACS verwaltet die JavaScript-Ressource normalerweise selbst. Fehlt sie unter **
 
    | Feld | Wert |
    | --- | --- |
-   | URL | `/local/vaillant-app-card.js?v=1.2.0` |
+   | URL | `/local/vaillant-app-card.js?v=1.3.0` |
    | Ressourcentyp | JavaScript-Modul |
 
 4. Das Frontend neu laden.
@@ -122,7 +125,7 @@ In die vorhandene Ressourcenliste eintragen:
 ```yaml
 lovelace:
   resources:
-    - url: /local/vaillant-app-card.js?v=1.2.0
+    - url: /local/vaillant-app-card.js?v=1.3.0
       type: module
 ```
 
@@ -179,15 +182,65 @@ Das ist eine vollständige Ansicht, nicht der Inhalt einer einzelnen manuellen K
 
 </details>
 
+## Farbstile und Themes
+
+![Vergleich der fünf Farbstile mit Beispieldaten](docs/color-schemes.jpg)
+
+**Karte bearbeiten → Visuellen Editor anzeigen → Farbstil** öffnen und den gewünschten Stil auswählen. Optional lassen sich dort auch Akzent- und Heizungsfarbe als Hex-Werte eintragen. Weitere Konfigurationsoptionen bleiben im YAML-Editor verfügbar.
+
+| Farbstil | `color_scheme` | Darstellung |
+| --- | --- | --- |
+| **Vaillant** | `vaillant` | Grüntöne und warme Heizungsakzente; bisheriger Standard |
+| **Home Assistant** | `home_assistant` | Hintergrund, Text, Akzent und Rahmen aus dem aktiven HA-Theme |
+| **Glas** | `glass` | Transparente Flächen mit Unschärfe und Theme-Akzentfarbe |
+| **Graphit** | `graphite` | Neutrale Grau- und dezente Lavendeltöne |
+| **Ozean** | `ocean` | Blautöne mit hellblauen Akzenten |
+
+Alle Stile folgen dem von Home Assistant gemeldeten Hell-/Dunkelmodus. Ohne `color_scheme` bleibt die bestehende Vaillant-Farbgebung erhalten.
+
+### Passend zum Home-Assistant-Standard oder aktiven Theme
+
+```yaml
+type: custom:vaillant-app-card
+color_scheme: home_assistant
+```
+
+Dieser Stil nutzt unter anderem `--ha-card-background`, `--card-background-color`, `--primary-text-color`, `--secondary-text-color`, `--primary-color` und die Rahmenvariablen von Home Assistant. Änderungen am aktiven Theme können dadurch auch die Karte einfärben.
+
+### Transparente Glasoptik
+
+```yaml
+type: custom:vaillant-app-card
+color_scheme: glass
+```
+
+Ein Dashboard-Hintergrund macht den Effekt deutlich sichtbarer. Die Karte berücksichtigt vorhandene Variablen wie `--ha-card-glass-tint`, `--ha-card-backdrop-filter` und `--ha-card-border-radius`; andernfalls verwendet sie eigene transparente Flächen und einen Blur-Effekt. Zusätzliche Karten oder `card-mod` sind dafür nicht erforderlich. Browser ohne Backdrop-Filter erhalten eine deckende Ersatzdarstellung.
+
+Für ein bereits installiertes Glass-Theme kann auch `home_assistant` passen, wenn dessen Hintergrund und Farben übernommen werden sollen. Der genaue Look hängt von den Variablen und Anpassungen des jeweiligen Themes ab.
+
+### Eigene Akzentfarben
+
+```yaml
+type: custom:vaillant-app-card
+color_scheme: home_assistant
+accent_color: "#03a9f4"
+heating_color: "#ff9800"
+```
+
+`accent_color` färbt aktive Elemente und die allgemeinen Akzente; `heating_color` die Heizungsakzente. Erlaubt sind Hex-Farben mit 3, 4, 6 oder 8 Stellen. Im YAML die Werte in Anführungszeichen setzen, da `#` sonst einen Kommentar einleitet. Zum Zurücksetzen die Option entfernen bzw. das Feld im visuellen Editor leeren.
+
 ## Konfiguration
 
-Die Einrichtung erfolgt per YAML. Ein eigener visueller Konfigurationseditor ist derzeit nicht enthalten.
+Beschriftung und Farben lassen sich im visuellen Karteneditor einstellen. Für die vollständige Konfiguration, etwa Entitätszuordnungen und feste Anlagenindizes, den YAML-Editor verwenden.
 
 | Option | Typ | Standard | Beschreibung |
 | --- | --- | --- | --- |
 | `type` | String | erforderlich | `custom:vaillant-app-card` |
 | `title` | String | `Wärmepumpe` | Überschrift der Karte |
 | `zone_name` | String | `Heizung` | Anzeigename der Heizungsansicht |
+| `color_scheme` | String | `vaillant` | `vaillant`, `home_assistant`, `glass`, `graphite` oder `ocean` |
+| `accent_color` | String | aus Farbstil/Theme | Optionale Hex-Farbe für allgemeine Akzente |
+| `heating_color` | String | aus Farbstil/Theme | Optionale Hex-Farbe für Heizungsakzente |
 | `auto_discover` | Boolean | `true` | Automatische Entitätszuordnung aktivieren |
 | `system_id` | String | automatisch | Bestimmte myVAILLANT-Anlage auswählen |
 | `config_entry_id` | String | alle myVAILLANT-Einträge | Suche auf einen Integrationseintrag beschränken |
@@ -294,6 +347,8 @@ Ein erfolgreich gesendeter Befehl bestätigt noch nicht die Änderung an der Anl
 
 **Manuell:** Die JavaScript-Datei ersetzen und den Versionsparameter der Ressourcen-URL anpassen, damit der Browser die neue Datei lädt.
 
+**Neu in 1.3.0:** Fünf auswählbare Farbstile, HA-Theme-Farben, Glasoptik und visueller Editor für Beschriftung und Farben. Bestehende Karten bleiben beim Vaillant-Stil.
+
 **Neu in 1.2.0:** Responsive Ansichten, direkte Sollwertsteuerung in der Übersicht, angepasste Navigation und Hell-/Dunkelmodus. Die bestehende Kartenkonfiguration bleibt gültig.
 
 **Wechsel von 1.0.0 auf 1.1.0:** Die festen Installations-IDs entfallen. Die minimale Konfiguration aus dem Schnellstart genügt; bestehende lokale `entities`-Zuordnungen behalten Vorrang.
@@ -310,6 +365,8 @@ Ein erfolgreich gesendeter Befehl bestätigt noch nicht die Änderung an der Anl
 | Alte Oberfläche nach einem Update | In HACS erneut herunterladen, Frontend neu laden und Browsercache prüfen. Doppelte Ressourcen entfernen. |
 | Energieanzeige fehlt oder ist veraltet | Energieentitäten und deren Zustand direkt in HA prüfen. Mehrere Energiegeräte gegebenenfalls auswählen. Zeitraum und Aktualisierung hängen von der Integration ab. |
 | Am Desktop erscheint die kompakte Ansicht | Die Karte hat weniger als 620 px Breite. Abschnitt verbreitern oder Panel-Ansicht verwenden. |
+| Neuer Farbstil/Editor fehlt | Aktuelle Version in HACS erneut herunterladen und das Frontend neu laden; veraltete Ressourcen und Browsercache prüfen. |
+| Glasoptik wirkt kaum transparent | `color_scheme: glass` gesetzt? Mit Dashboard-Hintergrund prüfen; ein Theme kann Tint/Blur überschreiben. Ohne Backdrop-Filter verwendet die Karte eine deckende Ersatzdarstellung. |
 | Dropdown-Auswahl nach Neuladen weg | Gewünschte Anlage, Zone oder Gerätezuordnung im lokalen Karten-YAML festlegen. |
 
 ## Datenschutz
@@ -327,7 +384,7 @@ node --test tests/discovery.test.cjs
 node --check vaillant-app-card.js
 ```
 
-Automatische Zuordnung, getrennte Sollwertbestätigungen, Serviceziele, Container-Layouts und Browserdarstellung wurden mit simulierten Daten geprüft. Die Ansichten wurden bei 320, 390, 820 und 1400 px Fensterbreite sowie als schmale Karte in einem breiten Desktopfenster geprüft. Eine Prüfung an einer echten Anlage steht noch aus.
+Automatische Zuordnung, getrennte Sollwertbestätigungen, Serviceziele, Container-Layouts, Farbstile, visueller Editor und Browserdarstellung wurden mit simulierten Daten geprüft. Die Ansichten wurden bei 320, 390, 820 und 1400 px Fensterbreite sowie als schmale Karte in einem breiten Desktopfenster geprüft. Eine Prüfung an einer echten Anlage steht noch aus.
 
 Fehler und Verbesserungsvorschläge können über [GitHub Issues](https://github.com/kafast/ha-vaillant-card/issues) gemeldet werden. Hilfreich sind HA-Version, Version der myVAILLANT-Integration, Kartenversion sowie die Schritte zur Reproduktion. Private IDs, Seriennummern, Zugangsdaten und persönliche Screenshots vorher entfernen bzw. unkenntlich machen.
 

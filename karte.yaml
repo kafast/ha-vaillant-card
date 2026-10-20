@@ -3,3 +3,8 @@ type: custom:vaillant-app-card
 # title: Wärmepumpe
 # zone_name: Heizung
 # Entitäten werden lokal aus der myVAILLANT-Integration zugeordnet.
+# Farbstile: vaillant (Standard), home_assistant, glass, graphite, ocean
+# color_scheme: home_assistant
+# Optional: eigene Akzentfarben als Hex, in Anführungszeichen
+# accent_color: "#03a9f4"
+# heating_color: "#ff9800"

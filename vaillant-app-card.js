@@ -1,7 +1,9 @@
-/* Vaillant App Card v1.2.0 — independent custom card, no external dependencies. */
+/* Vaillant App Card v1.3.0 — independent custom card, no external dependencies. */
 (() => {
   // Registry data stays in the authenticated HA browser session, never in the repository.
   const REGISTRY_CACHE = new WeakMap();
+  const COLOR_SCHEMES = {vaillant:'Vaillant',home_assistant:'Home Assistant',glass:'Glas',graphite:'Graphit',ocean:'Ozean'};
+  const isHexColor = value => typeof value==='string' && /^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(value);
   const ENTITY_KEYS = ['climate','water_heater','room','humidity','outdoor','tank','water_target',
     'heating_target','heating_mode','flow','flow_target','system_flow','pressure','online','trouble',
     'operating_state','circuit_state','boost','ventilation','away','heating_curve','veto_duration',
@@ -199,6 +201,60 @@ svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.7;stroke
 }
 @container vaillant (max-width:340px){.top{padding:18px 14px}.title{font-size:19px}.body{padding:0 10px 12px}.control-panel{padding:14px}.control-head{align-items:flex-start}.mode-pill{font-size:9px}.control-title h3{font-size:14px}.temperature strong{font-size:40px}.quick-action{padding:9px 3px}.quick-action .action-label{font-size:9px}.row{font-size:11px;gap:6px}.row select{max-width:58%;font-size:11px}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+/* Color schemes inherit the active HA mode; optional accents are set on the card. */
+ha-card,ha-card.light{--va-accent-bg:color-mix(in srgb,var(--va-green) 15%,transparent);--va-nav-bg:var(--va-bg)}
+ha-card .footer{background:var(--va-nav-bg)}
+ha-card[data-color-scheme="home_assistant"]{
+ --va-bg:var(--ha-card-background,var(--card-background-color,#1c1c1c));
+ --va-panel:var(--secondary-background-color,#282828);
+ --va-raised:color-mix(in srgb,var(--primary-text-color,#eee) 6%,transparent);
+ --va-line:var(--ha-card-border-color,var(--divider-color,#444));
+ --va-fg:var(--primary-text-color,#eee);--va-sub:var(--secondary-text-color,#aaa);
+ --va-green:var(--primary-color,#03a9f4);--va-orange:var(--state-climate-heat-color,#ff9800);
+ border-radius:var(--ha-card-border-radius,12px);box-shadow:var(--ha-card-box-shadow,none);
+ backdrop-filter:var(--ha-card-backdrop-filter,none);-webkit-backdrop-filter:var(--ha-card-backdrop-filter,none)
+}
+ha-card.light[data-color-scheme="home_assistant"]{
+ --va-bg:var(--ha-card-background,var(--card-background-color,#fff));
+ --va-panel:var(--secondary-background-color,#f5f5f5);
+ --va-line:var(--ha-card-border-color,var(--divider-color,#e0e0e0));
+ --va-fg:var(--primary-text-color,#212121);--va-sub:var(--secondary-text-color,#666)
+}
+ha-card[data-color-scheme="glass"]{
+ --va-bg:var(--ha-card-glass-tint,rgba(17,25,39,.55));--va-panel:rgba(255,255,255,.07);--va-raised:rgba(255,255,255,.075);
+ --va-line:rgba(255,255,255,.20);--va-fg:var(--primary-text-color,#f3f6fc);--va-sub:var(--secondary-text-color,#bdcadc);
+ --va-green:var(--primary-color,#80d8ff);--va-orange:var(--state-climate-heat-color,#ffc17e);--va-nav-bg:rgba(17,25,39,.88);
+ border-radius:var(--ha-card-border-radius,20px);box-shadow:0 8px 32px rgba(0,0,0,.15),inset 0 1px 0 rgba(255,255,255,.13);
+ backdrop-filter:var(--ha-card-backdrop-filter,blur(18px) saturate(1.15));-webkit-backdrop-filter:var(--ha-card-backdrop-filter,blur(18px) saturate(1.15))
+}
+ha-card.light[data-color-scheme="glass"]{
+ --va-bg:var(--ha-card-glass-tint,rgba(255,255,255,.60));--va-panel:rgba(255,255,255,.32);--va-raised:rgba(255,255,255,.26);
+ --va-line:rgba(30,50,80,.17);--va-fg:var(--primary-text-color,#172439);--va-sub:var(--secondary-text-color,#4e6179);
+ --va-green:var(--primary-color,#007da8);--va-orange:var(--state-climate-heat-color,#9b580b);--va-nav-bg:rgba(244,248,255,.92);
+ box-shadow:0 8px 32px rgba(30,45,65,.10),inset 0 1px 0 rgba(255,255,255,.7)
+}
+ha-card[data-color-scheme="glass"] select{background:rgba(20,29,43,.88)}
+ha-card.light[data-color-scheme="glass"] select{background:rgba(255,255,255,.92)}
+ha-card[data-color-scheme="graphite"]{
+ --va-bg:#17191e;--va-panel:#20232a;--va-raised:#2a2e36;--va-line:#3a404b;
+ --va-fg:#f1f3f8;--va-sub:#acb4c5;--va-green:#b7c7ed;--va-orange:#f3bc83
+}
+ha-card.light[data-color-scheme="graphite"]{
+ --va-bg:#fff;--va-panel:#f4f5f8;--va-raised:#e9ecf2;--va-line:#d6dbe5;
+ --va-fg:#202634;--va-sub:#576276;--va-green:#455f91;--va-orange:#985d1c
+}
+ha-card[data-color-scheme="ocean"]{
+ --va-bg:#101c2c;--va-panel:#172a40;--va-raised:#20364f;--va-line:#304c69;
+ --va-fg:#edf7ff;--va-sub:#a4bdd5;--va-green:#6fd4f7;--va-orange:#eebd7c
+}
+ha-card.light[data-color-scheme="ocean"]{
+ --va-bg:#f9fcff;--va-panel:#eef6ff;--va-raised:#e0effc;--va-line:#c5dbed;
+ --va-fg:#14334b;--va-sub:#4e6a83;--va-green:#0077a3;--va-orange:#975d11
+}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+ ha-card[data-color-scheme="glass"]{--va-bg:#182333;--va-panel:#202f42;--va-raised:#293c52}
+ ha-card.light[data-color-scheme="glass"]{--va-bg:#f4f7fc;--va-panel:#fff;--va-raised:#eaf0f7}
+}
   `;
   class VaillantAppCard extends HTMLElement {
     constructor() {
@@ -215,7 +271,9 @@ svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.7;stroke
         if(!ENTITY_KEYS.includes(key) || (id!==null && (typeof id!=='string' || !/^[a-z_]+\.[a-z0-9_]+$/.test(id)))) throw new Error('Ungültige Entitätszuordnung: '+key);
       }
       for(const key of ['zone','circuit','water']) if(config[key]!==undefined && !/^\d+$/.test(String(config[key]))) throw new Error(key+' muss ein nichtnegativer Index sein.');
-      this._config={title:'Wärmepumpe', zone_name:'Heizung', ...config};
+      if(config.color_scheme!==undefined && !Object.prototype.hasOwnProperty.call(COLOR_SCHEMES,config.color_scheme)) throw new Error('Unbekannter Farbstil: '+String(config.color_scheme));
+      for(const key of ['accent_color','heating_color']) if(config[key]!==undefined && !isHexColor(config[key])) throw new Error(key+' muss eine Hex-Farbe sein, z. B. #03a9f4.');
+      this._config={title:'Wärmepumpe', zone_name:'Heizung', color_scheme:'vaillant', ...config};
       this._ids={...emptyIds(), ...(config.entities || {})};
       this._selected={}; this._choices={}; this._registry=null; this._discoveryIssues=[]; this._discoveryError=null; this._discoveryBusy=false;
       this._discoveryToken++; this._resetPending(); this._signature=null;
@@ -234,6 +292,7 @@ svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.7;stroke
     get hass(){return this._hass;}
     getCardSize(){return this._page==='home'?10:13;}
     getGridOptions(){return {columns:'full',min_columns:6,rows:'auto'};}
+    static getConfigElement(){return document.createElement('vaillant-app-card-editor');}
     static getStubConfig(){return {type:'custom:vaillant-app-card'};}
     disconnectedCallback(){this._resetPending();}
     _resetPending() { for(const timer of Object.values(this._pendingTimers || {})) clearTimeout(timer); this._pendingTemps={}; this._pendingTimers={}; }
@@ -362,7 +421,8 @@ svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.7;stroke
       const page=this._page,tab=['heating','water'].includes(page)?'home':page;
       const contents=page==='home'?this._home():page==='energy'?this._energy():page==='status'?this._status():this._detail(page==='water');
       const notice=this._error||this._notice;
-      this.shadowRoot.innerHTML=`<style>${CSS}</style><ha-card class="${this._hass.themes?.darkMode===false?'light':'dark'}"><header class="top"><div><div class="eyebrow">Klima & Warmwasser</div><div class="title">${esc(this._config.title)}</div></div><div class="outside">${icon('temp')}<div><small>Außentemperatur</small>${this._formatSensor('outdoor')}</div></div></header><main class="body"><div class="discovery">${this._discoveryPanel()}</div>${notice?`<div class="message ${this._error?'error':''}" role="${this._error?'alert':'status'}"><button data-dismiss aria-label="Hinweis schließen">×</button>${esc(notice)}</div>`:''}${contents}</main><nav class="footer" aria-label="Wärmepumpe">${[['home','Übersicht'],['energy','Energie'],['status','Anlage']].map(([p,label])=>`<button class="nav ${tab===p?'active':''}" data-page="${p}" ${tab===p?'aria-current="page"':''}>${icon(p)}${label}</button>`).join('')}</nav></ha-card>`;
+      const accents=[this._config.accent_color?'--va-green:'+this._config.accent_color+';':'',this._config.heating_color?'--va-orange:'+this._config.heating_color+';':''].join('');
+      this.shadowRoot.innerHTML=`<style>${CSS}</style><ha-card data-color-scheme="${esc(this._config.color_scheme)}" style="${accents}" class="${this._hass.themes?.darkMode===false?'light':'dark'}"><header class="top"><div><div class="eyebrow">Klima & Warmwasser</div><div class="title">${esc(this._config.title)}</div></div><div class="outside">${icon('temp')}<div><small>Außentemperatur</small>${this._formatSensor('outdoor')}</div></div></header><main class="body"><div class="discovery">${this._discoveryPanel()}</div>${notice?`<div class="message ${this._error?'error':''}" role="${this._error?'alert':'status'}"><button data-dismiss aria-label="Hinweis schließen">×</button>${esc(notice)}</div>`:''}${contents}</main><nav class="footer" aria-label="Wärmepumpe">${[['home','Übersicht'],['energy','Energie'],['status','Anlage']].map(([p,label])=>`<button class="nav ${tab===p?'active':''}" data-page="${p}" ${tab===p?'aria-current="page"':''}>${icon(p)}${label}</button>`).join('')}</nav></ha-card>`;
     }
     _more(key){const id=this._ids[key];if(!id)return;this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:id},bubbles:true,composed:true}));}
     async _call(key,service,data={}){
@@ -393,6 +453,37 @@ svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.7;stroke
     }
     async _change(event){const el=event.target;if(el.dataset.discovery){if(this._busy)return;this._resetPending();this._notice=null;this._error=null;const key=el.dataset.discovery;if(key==='system')this._selected={system:el.value};else if(key==='zone'){delete this._selected.circuit;this._selected.zone=el.value;}else this._selected[key]=el.value;this._applyDiscovery();this._render();return;}if(!el.dataset.mode)return;const key=el.dataset.mode;await this._call(key,key==='climate'?'set_hvac_mode':'set_operation_mode',key==='climate'?{hvac_mode:el.value}:{operation_mode:el.value});}
   }
+  class VaillantAppCardEditor extends HTMLElement {
+    constructor(){super();this.attachShadow({mode:'open'});this._config={};this.shadowRoot.addEventListener('change',event=>this._change(event));}
+    setConfig(config){this._config={...config};this._error=null;this._render();}
+    set hass(hass){this._hass=hass;}
+    _change(event){
+      const key=event.target.dataset.key,value=event.target.value;
+      if(!['title','zone_name','color_scheme','accent_color','heating_color'].includes(key))return;
+      if(key==='color_scheme'&&!Object.prototype.hasOwnProperty.call(COLOR_SCHEMES,value))return;
+      if(['accent_color','heating_color'].includes(key)&&value.trim()&&!isHexColor(value.trim())){
+        this._error='Bitte eine Hex-Farbe wie #03a9f4 eingeben oder das Feld leer lassen.';this._render();return;
+      }
+      const config={...this._config,type:this._config.type || 'custom:vaillant-app-card'};
+      if(value.trim())config[key]=value.trim();else delete config[key];
+      this._config=config;this._error=null;
+      this.dispatchEvent(new CustomEvent('config-changed',{detail:{config},bubbles:true,composed:true}));
+      this._render();
+    }
+    _render(){
+      const field=(key,label,placeholder)=>`<label>${label}<input data-key="${key}" value="${esc(this._config[key] || '')}" placeholder="${placeholder}" spellcheck="false"></label>`;
+      this.shadowRoot.innerHTML=`<style>
+        :host{display:block;color:var(--primary-text-color,#212121);font-family:inherit}*{box-sizing:border-box}.fields{display:grid;gap:16px;padding:8px 0}label{display:grid;gap:7px;font-size:13px}input,select{font:inherit;color:inherit;min-height:44px;border:1px solid var(--divider-color,#ccc);border-radius:8px;background:var(--card-background-color,#fff);padding:10px 12px;width:100%}input:focus-visible,select:focus-visible{outline:2px solid var(--primary-color,#03a9f4);outline-offset:2px}.pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}p{font-size:12px;line-height:1.6;margin:0;color:var(--secondary-text-color,#666)}.error{color:var(--error-color,#b3261e)}@media(max-width:500px){.pair{grid-template-columns:1fr}}
+        </style><div class="fields">
+        <div class="pair">${field('title','Überschrift','Wärmepumpe')}${field('zone_name','Name der Heizung','Heizung')}</div>
+        <label>Farbstil<select data-key="color_scheme">${Object.entries(COLOR_SCHEMES).map(([key,name])=>`<option value="${key}" ${key===(this._config.color_scheme || 'vaillant')?'selected':''}>${name}</option>`).join('')}</select></label>
+        <p>Home Assistant übernimmt die Farben des aktiven Themes. Glas nutzt transparente Flächen; mit einem Dashboard-Hintergrund ist der Effekt deutlicher. Hell/Dunkel folgt Home Assistant.</p>
+        <div class="pair">${field('accent_color','Akzentfarbe · optional','#03a9f4')}${field('heating_color','Heizungsfarbe · optional','#ff9800')}</div>
+        <p>Farbwerte als Hex eingeben. Leere Felder verwenden die Farben des Farbstils. Weitere Einstellungen sind im YAML-Editor verfügbar.</p>
+        ${this._error?`<p class="error" role="alert">${esc(this._error)}</p>`:''}</div>`;
+    }
+  }
+  if(!customElements.get('vaillant-app-card-editor'))customElements.define('vaillant-app-card-editor',VaillantAppCardEditor);
   if(!customElements.get('vaillant-app-card'))customElements.define('vaillant-app-card',VaillantAppCard);
   window.customCards=window.customCards||[];
   if(!window.customCards.some(c=>c.type==='vaillant-app-card'))window.customCards.push({type:'vaillant-app-card',name:'Vaillant App Card',description:'Heizung, Warmwasser, Energie und Status im Stil der myVAILLANT-App.',preview:true});
