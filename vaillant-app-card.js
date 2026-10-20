@@ -1,43 +1,155 @@
-/* Vaillant App Card v1.0.0 — independent custom card, no external dependencies. */
+/* Vaillant App Card v1.1.0 — independent custom card, no external dependencies. */
 (() => {
-  const DEFAULTS = {
-    climate: 'climate.haus_zone_1_circuit_0_climate',
-    water_heater: 'water_heater.haus_domestic_hot_water_0',
-    room: 'sensor.haus_zone_1_circuit_0_current_temperature',
-    humidity: 'sensor.haus_zone_1_circuit_0_humidity',
-    outdoor: 'sensor.haus_outdoor_temperature',
-    tank: 'sensor.haus_domestic_hot_water_0_tank_temperature',
-    water_target: 'sensor.haus_domestic_hot_water_0_setpoint',
-    heating_target: 'sensor.haus_zone_1_circuit_0_desired_temperature',
-    heating_mode: 'sensor.haus_zone_1_circuit_0_heating_operating_mode',
-    flow: 'sensor.haus_circuit_0_current_flow_temperature',
-    flow_target: 'sensor.heitzkreis_haus_circuit_0_flow_temperature_setpoint',
-    system_flow: 'sensor.haus_system_flow_temperature',
-    pressure: 'sensor.haus_system_water_pressure',
-    online: 'binary_sensor.haus_online_status',
-    trouble: 'binary_sensor.haus_trouble_codes',
-    operating_state: 'sensor.haus_energy_manager_state',
-    circuit_state: 'sensor.haus_circuit_0_state',
-    boost: 'switch.haus_domestic_hot_water_0_boost',
-    ventilation: 'switch.haus_zone_1_circuit_0_ventilation_boost',
-    away: 'switch.haus_away_mode',
-    heating_curve: 'number.haus_circuit_0_heating_curve',
-    veto_duration: 'number.haus_zone_1_circuit_0_quick_veto_duration',
-    efficiency: 'sensor.haus_heating_energy_efficiency',
-    firmware: 'sensor.haus_firmware_version',
-    firmware_update: 'binary_sensor.haus_firmware_update_required',
-    heating_calendar: 'calendar.haus_zone_1_circuit_0',
-    water_calendar: 'calendar.haus_domestic_hot_water_0',
-    circulation_calendar: 'calendar.circulating_water_in_haus_domestic_hot_water_0',
-    electric_heating: 'sensor.garten_wp_ausseneinheit_haus_device_1_arotherm_plus_consumed_electrical_energy_heating',
-    electric_water: 'sensor.garten_wp_ausseneinheit_haus_device_1_arotherm_plus_consumed_electrical_energy_domestic_hot_water',
-    environment_heating: 'sensor.garten_wp_ausseneinheit_haus_device_1_arotherm_plus_earned_environment_energy_heating',
-    environment_water: 'sensor.garten_wp_ausseneinheit_haus_device_1_arotherm_plus_earned_environment_energy_domestic_hot_water',
-    heat_heating: 'sensor.garten_wp_ausseneinheit_haus_device_1_arotherm_plus_heat_generated_heating',
-    heat_water: 'sensor.garten_wp_ausseneinheit_haus_device_1_arotherm_plus_heat_generated_domestic_hot_water',
-    hydraulic_electric: 'sensor.hwr_hydraulik_station_haus_device_0_hydraulic_station_consumed_electrical_energy_heating',
-    hydraulic_heat: 'sensor.hwr_hydraulik_station_haus_device_0_hydraulic_station_heat_generated_heating'
-  };
+  // Registry data stays in the authenticated HA browser session, never in the repository.
+  const REGISTRY_CACHE = new WeakMap();
+  const ENTITY_KEYS = ['climate','water_heater','room','humidity','outdoor','tank','water_target',
+    'heating_target','heating_mode','flow','flow_target','system_flow','pressure','online','trouble',
+    'operating_state','circuit_state','boost','ventilation','away','heating_curve','veto_duration',
+    'efficiency','firmware','firmware_update','heating_calendar','water_calendar','circulation_calendar',
+    'electric_heating','electric_water','environment_heating','environment_water','heat_heating',
+    'heat_water','hydraulic_electric','hydraulic_heat'];
+  const emptyIds = () => Object.fromEntries(ENTITY_KEYS.map(k => [k, null]));
+  const uid = e => String(e?.unique_id || '').replace(/^mypyllant /, 'mypyllant_');
+  const domain = e => String(e?.entity_id || '').split('.')[0];
+  const label = e => e?.name || e?.original_name || e?.entity_id || 'Nicht benannt';
+  function only(items) { return items.length === 1 ? items[0] : null; }
+  function choose(items, wanted) {
+    if (wanted !== undefined && wanted !== null && wanted !== '') return items.find(i => String(i.value) === String(wanted)) || null;
+    return only(items.filter(i => !i.disabled)) || only(items);
+  }
+  async function loadRegistry(hass, force = false) {
+    const connection = hass.connection || hass;
+    if (force) REGISTRY_CACHE.delete(connection);
+    if (!REGISTRY_CACHE.has(connection)) {
+      const promise = Promise.all([
+        hass.callWS({type:'config/entity_registry/list'}),
+        hass.callWS({type:'config/device_registry/list'}).catch(() => [])
+      ]).then(([entities, devices]) => {
+        if (!Array.isArray(entities) || !Array.isArray(devices)) throw new Error('Unerwartete Registerantwort.');
+        const relevant = entities.filter(e => e.platform === 'mypyllant');
+        const deviceIds = new Set(relevant.map(e => e.device_id).filter(Boolean));
+        return {entities:relevant, devices:devices.filter(d => deviceIds.has(d.id))};
+      }).catch(error => { if (REGISTRY_CACHE.get(connection) === promise) REGISTRY_CACHE.delete(connection); throw error; });
+      REGISTRY_CACHE.set(connection, promise);
+    }
+    return REGISTRY_CACHE.get(connection);
+  }
+  function resolveEntities(registry, config, selected = {}) {
+    const manual = config.entities || {};
+    const ids = emptyIds();
+    const issues = [];
+    const choices = {system:[], zone:[], water:[], circuit:[], energy_device:[]};
+    const all = registry.entities.filter(e => e.platform === 'mypyllant' && (!config.config_entry_id || e.config_entry_id === config.config_entry_id));
+    const parsed = all.map(e => {
+      const match = uid(e).match(/^mypyllant_(.+)_(zone_\d+_climate|domestic_hot_water_\d+_base|home_(?:base|control_online|control_error))$/);
+      return match ? {entry:e, system:match[1]} : null;
+    }).filter(Boolean);
+    const systems = [...new Set(parsed.map(p => p.system))];
+    for (const system of systems) {
+      const entries = parsed.filter(p => p.system === system).map(p => p.entry);
+      const home = entries.find(e => uid(e) === `mypyllant_${system}_home_base`);
+      const device = registry.devices.find(d => d.id === home?.device_id);
+      choices.system.push({value:system, label:device?.name_by_user || device?.name || (home ? label(home).replace(/ Firmware Version$/i,'') : label(entries[0])), disabled:entries.every(e => e.disabled_by)});
+    }
+    const explicitClimate = all.find(e => e.entity_id === manual.climate);
+    const explicitWater = all.find(e => e.entity_id === manual.water_heater);
+    const pinned = parsed.find(p => p.entry === explicitClimate) || parsed.find(p => p.entry === explicitWater);
+    const system = choose(choices.system, config.system_id ?? selected.system ?? pinned?.system);
+    const applyManual = () => {
+      for (const key of ENTITY_KEYS) if (Object.prototype.hasOwnProperty.call(manual,key)) ids[key] = manual[key] || null;
+      return {ids, choices, selected:selection, issues};
+    };
+    const selection = {};
+    if (!system) {
+      issues.push(systems.length ? 'Bitte eine Anlage auswählen.' : 'Keine myVAILLANT-Anlage gefunden. Integration und Entitäten prüfen.');
+      return applyManual();
+    }
+    selection.system = system.value;
+    const prefix = `mypyllant_${system.value}_`;
+    const entries = all.filter(e => uid(e).startsWith(prefix) && !systems.some(other => other!==system.value && other.length>system.value.length && uid(e).startsWith(`mypyllant_${other}_`)));
+    function match(key, dom, unique) {
+      const candidates = entries.filter(e => domain(e) === dom && uid(e) === unique);
+      const picked = only(candidates.filter(e => !e.disabled_by)) || only(candidates);
+      ids[key] = picked?.entity_id || null;
+      if (candidates.length > 1 && !picked) issues.push(`Mehrdeutige Zuordnung: ${key}.`);
+    }
+    const systemFields = {
+      outdoor:['sensor','home_outdoor_temperature'], pressure:['sensor','home_water_pressure'],
+      system_flow:['sensor','home_system_flow_temperature'], operating_state:['sensor','home_energy_manager_state'],
+      online:['binary_sensor','home_control_online'], trouble:['binary_sensor','home_control_error'],
+      firmware:['sensor','home_base'], firmware_update:['binary_sensor','home_firmware_update_required'],
+      away:['switch','home_holiday_switch'], efficiency:['sensor','heating_energy_efficiency']
+    };
+    for (const [key,[dom,suffix]] of Object.entries(systemFields)) match(key,dom,prefix+suffix);
+    const zoneEntries = entries.filter(e => domain(e)==='climate' && /^zone_\d+_climate$/.test(uid(e).slice(prefix.length)));
+    choices.zone = zoneEntries.map(e => ({value:uid(e).slice(prefix.length).match(/^zone_(\d+)/)[1],label:label(e).replace(/ Climate$/i,''),disabled:!!e.disabled_by}));
+    const explicitZone = explicitClimate && uid(explicitClimate).slice(prefix.length).match(/^zone_(\d+)_climate$/)?.[1];
+    const zone = choose(choices.zone, config.zone ?? selected.zone ?? explicitZone);
+    if (zone) {
+      selection.zone = zone.value;
+      const zp = `${prefix}zone_${zone.value}_`;
+      for (const [key,dom,suffix] of [
+        ['climate','climate','climate'], ['room','sensor','current_temperature'], ['humidity','sensor','humidity'],
+        ['heating_target','sensor','desired_temperature'], ['heating_mode','sensor','heating_operating_mode'],
+        ['ventilation','switch','ventilation_boost_switch'], ['veto_duration','number','quick_veto_duration'],
+        ['heating_calendar','calendar','heating_calendar']
+      ]) match(key,dom,zp+suffix);
+    } else if (choices.zone.length > 1) issues.push('Bitte eine Heizzone auswählen.');
+    const waterEntries = entries.filter(e => domain(e)==='water_heater' && /^domestic_hot_water_\d+_base$/.test(uid(e).slice(prefix.length)));
+    choices.water = waterEntries.map(e => ({value:uid(e).slice(prefix.length).match(/^domestic_hot_water_(\d+)/)[1],label:label(e),disabled:!!e.disabled_by}));
+    const explicitDhw = explicitWater && uid(explicitWater).slice(prefix.length).match(/^domestic_hot_water_(\d+)_base$/)?.[1];
+    const water = choose(choices.water, config.water ?? selected.water ?? explicitDhw);
+    if (water) {
+      selection.water = water.value;
+      const wp = `${prefix}domestic_hot_water_${water.value}_`;
+      for (const [key,dom,suffix] of [
+        ['water_heater','water_heater','base'], ['tank','sensor','tank_temperature'], ['water_target','sensor','set_point'],
+        ['boost','switch','boost_switch'], ['water_calendar','calendar','heating_calendar'], ['circulation_calendar','calendar','circulation_calendar']
+      ]) match(key,dom,wp+suffix);
+    } else if (choices.water.length>1) issues.push('Bitte einen Warmwasserspeicher auswählen.');
+    const circuits = [...new Set(entries.map(e => uid(e).slice(prefix.length).match(/^circuit_(\d+)_/)?.[1]).filter(v=>v!==undefined))];
+    choices.circuit = circuits.map(value => ({value,label:`Heizkreis ${Number(value)+1}`,disabled:false}));
+    const climateEntry = entries.find(e => e.entity_id === ids.climate);
+    // The original integration name contains the actual associated circuit, independently of a renamed entity_id.
+    const associated = climateEntry?.original_name?.match(/\(Circuit\s+(\d+)\)/i)?.[1];
+    const circuit = choose(choices.circuit, config.circuit ?? selected.circuit ?? associated);
+    if (circuit) {
+      selection.circuit=circuit.value;
+      for (const [key,dom,suffix] of [
+        ['flow','sensor','flow_temperature'], ['flow_target','sensor','flow_temperature_setpoint'],
+        ['circuit_state','sensor','state'], ['heating_curve','number','heating_curve']
+      ]) match(key,dom,`${prefix}circuit_${circuit.value}_${suffix}`);
+    } else if (choices.circuit.length>1) issues.push('Zugehörigen Heizkreis auswählen; keine Zuordnung geraten.');
+    const energyPatterns = {
+      electric_heating:/ consumed electrical energy heating$/i,
+      electric_water:/ consumed electrical energy domestic hot water$/i,
+      environment_heating:/ earned environment energy heating$/i,
+      environment_water:/ earned environment energy domestic hot water$/i,
+      heat_heating:/ heat generated heating$/i,
+      heat_water:/ heat generated domestic hot water$/i
+    };
+    // Energy unique IDs contain opaque indices, not the energy type. Use immutable original integration names.
+    const energy = entries.filter(e => domain(e)==='sensor' && e.device_id && Object.values(energyPatterns).some(p=>p.test(e.original_name || '')));
+    const deviceIds = [...new Set(energy.map(e => e.device_id))];
+    const getDevice = id => registry.devices.find(d => d.id===id);
+    const isHydraulic = id => /hydraulic|hydraulik/i.test(`${getDevice(id)?.model || ''} ${getDevice(id)?.name || ''} ${energy.find(e=>e.device_id===id)?.original_name || ''}`);
+    const outer = deviceIds.filter(id => !isHydraulic(id));
+    choices.energy_device = outer.map(id => ({value:id,label:getDevice(id)?.name_by_user || getDevice(id)?.name || 'Energiegerät',disabled:false}));
+    const energyDevice = choose(choices.energy_device,config.energy_device_id ?? selected.energy_device);
+    if (energyDevice) {
+      selection.energy_device=energyDevice.value;
+      for (const [key,pattern] of Object.entries(energyPatterns)) {
+        const candidates=energy.filter(e=>e.device_id===energyDevice.value && pattern.test(e.original_name || ''));
+        ids[key]=(only(candidates.filter(e=>!e.disabled_by)) || only(candidates))?.entity_id || null;
+      }
+    } else if(choices.energy_device.length>1) issues.push('Für die Energieanzeige ein Gerät auswählen.');
+    const hydraulic=only(deviceIds.filter(isHydraulic));
+    if(hydraulic) for(const [key,pattern] of [['hydraulic_electric',energyPatterns.electric_heating],['hydraulic_heat',energyPatterns.heat_heating]]) {
+      const candidates=energy.filter(e=>e.device_id===hydraulic&&pattern.test(e.original_name || ''));
+      ids[key]=(only(candidates.filter(e=>!e.disabled_by)) || only(candidates))?.entity_id || null;
+    }
+    return applyManual();
+  }
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const numeric = v => v !== null && v !== undefined && String(v).trim() !== '' && Number.isFinite(Number(v)) ? Number(v) : null;
   const fmt = (v, digits=1) => numeric(v) === null ? '—' : Number(v).toLocaleString('de-DE', {minimumFractionDigits:digits, maximumFractionDigits:digits});
@@ -72,7 +184,7 @@
     svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
     .top{display:flex;align-items:center;justify-content:space-between;padding:23px 22px 13px;gap:10px}.title{font-size:21px;letter-spacing:-.4px}.eyebrow{font-size:10px;text-transform:uppercase;letter-spacing:1.7px;color:var(--va-sub);margin-bottom:5px}.outside{display:flex;align-items:center;gap:6px;color:var(--va-sub);font-size:13px;white-space:nowrap}.outside svg{width:17px}
     .body{padding:5px 18px 22px;min-height:435px}.muted{color:var(--va-sub)}.small{font-size:12px;line-height:1.6}.section{font-size:10px;letter-spacing:1.5px;color:var(--va-sub);text-transform:uppercase;margin:25px 1px 11px}
-    .panel{border-radius:12px;background:var(--va-panel);border:1px solid #2a302d;margin-top:10px}.quick{margin:1px 0 17px;border:1px solid var(--va-line);border-radius:12px}.quick summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:9px;padding:14px;font-size:13px}.quick summary::after{content:'⌄';margin-left:auto;color:var(--va-sub)}.quick summary::-webkit-details-marker{display:none}.quick-body{padding:0 8px 8px;display:grid;gap:6px}.quick-body button{display:flex;align-items:center;gap:11px;width:100%;border:0;background:var(--va-panel);text-align:left;padding:12px;border-radius:7px;font-size:13px}.quick-body button.on{color:var(--va-green);background:#073b32}.quick button span{margin-left:auto;font-size:11px;color:var(--va-sub)}
+    .panel{border-radius:12px;background:var(--va-panel);border:1px solid #2a302d;margin-top:10px}.quick{margin:1px 0 17px;border:1px solid var(--va-line);border-radius:12px}.quick summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:9px;padding:14px;font-size:13px}.quick summary::after{content:'⌄';margin-left:auto;color:var(--va-sub)}.quick summary::-webkit-details-marker{display:none}.quick-body{padding:0 8px 8px;display:grid;gap:6px}.quick-body button{display:flex;align-items:center;gap:11px;width:100%;border:0;background:var(--va-panel);text-align:left;padding:12px;border-radius:7px;font-size:13px}.quick-body button.on{color:var(--va-green);background:#073b32}.quick-body button span{margin-left:auto;font-size:11px;color:var(--va-sub)}
     .zone{display:block;position:relative;width:100%;padding:17px 15px 15px;text-align:center;background:linear-gradient(145deg,#252a27,#1a1e1c);color:var(--va-fg);border:1px solid #414943;border-radius:12px;margin:12px 0 0}.zone-name{font-size:14px;margin-bottom:12px}.zone-bar{height:2px;background:var(--va-green);box-shadow:0 0 9px #00b59c80;margin-bottom:16px}.zone.heating .zone-bar{background:linear-gradient(90deg,var(--va-orange),#698e64,var(--va-green));box-shadow:0 0 9px #ddb05550}.zone-main{display:flex;align-items:center;justify-content:center;gap:10px}.zone-main svg{color:var(--va-green)}.zone.heating .zone-main svg{color:var(--va-orange)}.zone-number{font-size:34px;font-weight:300;letter-spacing:-1px}.zone-unit{font-size:20px}.zone-sub{margin-top:8px;font-size:11px;color:var(--va-sub);display:flex;gap:8px;justify-content:space-between}.zone-sub b{font-weight:400;color:#e1e7e2}.chevron{position:absolute;right:12px;top:15px;color:#8c9890}.chevron svg{width:15px}
     .footer{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--va-line);padding:6px;background:#191d1b}.nav{background:transparent;border:0;padding:9px 4px;color:var(--va-sub);display:flex;align-items:center;flex-direction:column;gap:6px;font-size:10px;border-radius:10px}.nav.active{color:var(--va-green);background:#083329}.nav svg{width:20px;height:20px}
     .back{border:0;background:none;color:var(--va-green);padding:5px;display:flex;align-items:center;gap:10px}.back span{color:var(--va-fg);font-size:17px}.detail-top{display:flex;justify-content:space-around;margin:20px 0 3px;text-align:center}.detail-top b{display:block;font-size:19px;font-weight:400;margin-bottom:4px}.detail-top small{color:var(--va-sub);font-size:11px}
@@ -86,25 +198,71 @@
   class VaillantAppCard extends HTMLElement {
     constructor() {
       super(); this.attachShadow({mode:'open'}); this._page='home'; this._quick=false; this._busy=false;
+      this._discoveryToken=0; this._selected={}; this._choices={}; this._ids=emptyIds();
       this.shadowRoot.addEventListener('click', e => this._click(e));
       this.shadowRoot.addEventListener('change', e => this._change(e));
       this.shadowRoot.addEventListener('toggle', e => { if(e.target.matches?.('.quick')) this._quick=e.target.open; }, true);
     }
     setConfig(config) {
       if (!config || typeof config !== 'object') throw new Error('Konfiguration fehlt.');
-      this._config={title:'Haus', zone_name:'Zone 1', ...config};
-      this._ids={...DEFAULTS, ...(config.entities || {})}; this._render();
+      if(config.entities && (typeof config.entities!=='object' || Array.isArray(config.entities))) throw new Error('entities muss eine Zuordnung sein.');
+      for(const [key,id] of Object.entries(config.entities || {})) {
+        if(!ENTITY_KEYS.includes(key) || (id!==null && (typeof id!=='string' || !/^[a-z_]+\.[a-z0-9_]+$/.test(id)))) throw new Error('Ungültige Entitätszuordnung: '+key);
+      }
+      for(const key of ['zone','circuit','water']) if(config[key]!==undefined && !/^\d+$/.test(String(config[key]))) throw new Error(key+' muss ein nichtnegativer Index sein.');
+      this._config={title:'Wärmepumpe', zone_name:'Heizung', ...config};
+      this._ids={...emptyIds(), ...(config.entities || {})};
+      this._selected={}; this._choices={}; this._registry=null; this._discoveryIssues=[]; this._discoveryError=null; this._discoveryBusy=false;
+      this._discoveryToken++; this._resetPending(); this._signature=null;
+      this._render();
+      if(this._hass) this._discoveryPromise=this._discover();
     }
     set hass(hass) {
       this._hass=hass;
-      const signature=JSON.stringify(Object.values(this._ids || {}).map(id=>hass.states[id]));
+      const connection=hass.connection || hass.callWS;
+      if(this._config && connection!==this._connection) {
+        this._connection=connection; this._discoveryPromise=this._discover();
+      }
+      const signature=JSON.stringify(Object.values(this._ids).filter(Boolean).map(id=>hass.states[id]));
       if (signature !== this._signature) { this._signature=signature; this._render(); }
     }
     get hass(){return this._hass;}
     getCardSize(){return this._page==='home'?10:13;}
     getGridOptions(){return {columns:12,min_columns:6,rows:'auto'};}
-    static getStubConfig(){return {type:'custom:vaillant-app-card',title:'Haus',zone_name:'Zone 1'};}
+    static getStubConfig(){return {type:'custom:vaillant-app-card'};}
     disconnectedCallback(){clearTimeout(this._pendingTimer);}
+    _resetPending() { clearTimeout(this._pendingTimer); this._pending=null; }
+    async _discover(force=false) {
+      if (!this._config || !this._hass || this._config.auto_discover===false) return;
+      const token=++this._discoveryToken;
+      this._discoveryBusy=true; this._discoveryError=null; this._render();
+      try {
+        const registry=await loadRegistry(this._hass,force);
+        if(token!==this._discoveryToken)return;
+        this._registry=registry;
+        this._applyDiscovery();
+      } catch(error) {
+        if(token!==this._discoveryToken)return;
+        this._discoveryError='Automatische Zuordnung nicht möglich. Erneut suchen oder Entitäten im lokalen Karten-YAML angeben.';
+        this._ids={...emptyIds(),...(this._config.entities||{})};
+      } finally {
+        if(token===this._discoveryToken){this._discoveryBusy=false;this._render();}
+      }
+    }
+    _applyDiscovery() {
+      if(!this._registry)return;
+      const resolved=resolveEntities(this._registry,this._config,this._selected);
+      this._ids=resolved.ids; this._choices=resolved.choices; this._selected=resolved.selected; this._discoveryIssues=resolved.issues;
+      this._signature=null;
+    }
+    _discoveryPanel() {
+      if(this._config.auto_discover===false)return '';
+      const titles={system:'Anlage',zone:'Heizzone',water:'Warmwasserspeicher',circuit:'Heizkreis',energy_device:'Energiegerät'};
+      const pinned={system:'system_id',zone:'zone',water:'water',circuit:'circuit',energy_device:'energy_device_id'};
+      const selectors=Object.entries(this._choices||{}).filter(([key,items])=>items.length>1 && this._config[pinned[key]]===undefined).map(([key,items])=>
+        `<label class="row"><span>${titles[key]}</span><select data-discovery="${key}" aria-label="${titles[key]} wählen" ${this._busy?'disabled':''}><option value="" disabled ${this._selected[key]===undefined?'selected':''}>Bitte auswählen</option>${items.map(i=>`<option value="${esc(i.value)}" ${String(this._selected[key])===String(i.value)?'selected':''}>${esc(i.label)}${i.disabled?' (deaktiviert)':''}</option>`).join('')}</select></label>`).join('');
+      return `${this._discoveryBusy?'<div class="small muted" role="status">myVAILLANT-Entitäten werden zugeordnet …</div>':''}${this._discoveryError?`<div class="message error">${esc(this._discoveryError)}</div>`:''}${selectors}${this._discoveryIssues?.length?`<div class="availability">${this._discoveryIssues.map(esc).join('<br>')}</div>`:''}${this._discoveryError || this._discoveryIssues?.length || this._page==='status'?'<button class="row" data-discover>Entitäten neu suchen</button>':''}`;
+    }
     _entity(key){return this._hass?.states[this._ids[key]];}
     _ok(key){const s=this._entity(key);return !!s && !['unavailable','unknown'].includes(s.state);}
     _state(key){return this._ok(key)?this._entity(key).state:null;}
@@ -158,7 +316,7 @@
       ${water?'':`<div class="detail-top"><div><b>${this._formatSensor('outdoor')}</b><small>Außen</small></div><div><b>${fmt(this._first(this._attr('climate','current_humidity'),this._num('humidity')),0)} %</b><small>Luftfeuchte</small></div></div>`}
       <div class="dial ${water?'':'heating'}"><div class="halo"></div><div class="dial-inner"><div class="dial-icon">${icon(water?'water':'heat')}</div><div class="dial-value">${fmt(target)}<span> °C</span></div><div class="dial-current">Aktuell: ${fmt(current)} °C</div></div></div>
       <div class="stepper"><button data-step="-1" aria-label="Solltemperatur senken" ${blocked||(min!==null&&target<=min)?'disabled':''}>−</button><small>${this._pending?.key===key?'Wird übernommen …':'Wunschtemperatur'}</small><button data-step="1" aria-label="Solltemperatur erhöhen" ${blocked||(max!==null&&target>=max)?'disabled':''}>+</button></div>
-      ${!this._ok(key)?`<div class="message error">${esc(this._ids[key])} ist deaktiviert, fehlt oder ist nicht verfügbar.</div>`:''}
+      ${!this._ok(key)?`<div class="message error">${esc(this._ids[key] || (water?'Warmwasser':'Heizung'))} ist noch nicht zugeordnet, deaktiviert oder nicht verfügbar.</div>`:''}
       ${!water?`<div class="small muted" style="margin-bottom:16px">Im Zeitbetrieb kann eine Änderung als zeitlich begrenzte Wunschtemperatur gelten (Quick Veto).</div>`:''}
       <div class="section">Optionen</div>${this._modeSelect(water)}
       ${this._row('Wochenplaner',water?'water_calendar':'heating_calendar','calendar','Kalender öffnen')}
@@ -169,27 +327,28 @@
     _energyValue(key){const n=this._num(key),unit=this._attr(key,'unit_of_measurement');return n===null?null:unit==='Wh'?n/1000:unit==='kWh'?n:unit==='MWh'?n*1000:null;}
     _energyRow(label,key,ic){const n=this._energyValue(key);return this._row(label,key,ic,n===null?this._formatSensor(key):`${fmt(n,2)} kWh`);}
     _energy(){const a=this._energyValue('electric_heating'),b=this._energyValue('electric_water');return `
-      <span class="tag">Energie · Sensorstände</span><div class="energy-ring"><strong>${fmt(a===null||b===null?null:a+b,2)}</strong><span class="small muted">kWh</span><small>Elektrische Energie<br>aroTHERM plus</small></div>
+      <span class="tag">Energie · Sensorstände</span><div class="energy-ring"><strong>${fmt(a===null||b===null?null:a+b,2)}</strong><span class="small muted">kWh</span><small>Elektrische Energie<br>Energiegerät</small></div>
       <div class="small muted">Aktuelle Werte der Integration. Der Zeitraum richtet sich nach den Sensoren; keine Jahres- oder Monatsauswertung.</div>
-      <div class="section">Elektrische Energie · aroTHERM plus</div>${this._energyRow('Heizung','electric_heating','heat')}${this._energyRow('Warmwasser','electric_water','water')}
+      <div class="section">Elektrische Energie · Energiegerät</div>${this._energyRow('Heizung','electric_heating','heat')}${this._energyRow('Warmwasser','electric_water','water')}
       <div class="section">Energieeffizienz</div>${this._metric('Heizen + Warmwasser','efficiency','leaf',2)}
-      <div class="section">Umweltertrag · aroTHERM plus</div>${this._energyRow('Heizung','environment_heating','leaf')}${this._energyRow('Warmwasser','environment_water','leaf')}
-      <div class="section">Erzeugte Wärme · aroTHERM plus</div>${this._energyRow('Heizung','heat_heating','heat')}${this._energyRow('Warmwasser','heat_water','water')}
+      <div class="section">Umweltertrag · Energiegerät</div>${this._energyRow('Heizung','environment_heating','leaf')}${this._energyRow('Warmwasser','environment_water','leaf')}
+      <div class="section">Erzeugte Wärme · Energiegerät</div>${this._energyRow('Heizung','heat_heating','heat')}${this._energyRow('Warmwasser','heat_water','water')}
       <div class="section">Hydraulic station · separat</div>${this._energyRow('Elektrische Energie Heizung','hydraulic_electric','energy')}${this._energyRow('Erzeugte Wärme Heizung','hydraulic_heat','heat')}
       <div class="small muted" style="margin-top:15px">Die Hydraulikstation wird separat angezeigt und nicht zur Außeneinheit addiert. Die Karte fordert keine zusätzlichen Cloud-Aktualisierungen an.</div>`;}
+    _circuitLabel(){return this._selected.circuit===undefined?'Heizkreis':`Heizkreis ${Number(this._selected.circuit)+1}`;}
     _status(){const required=['climate','water_heater','online','trouble','outdoor','room','tank','flow','pressure'];const missing=required.filter(k=>!this._ok(k));return `
-      <div class="section" style="margin-top:9px">Systemstatus</div>${this._banner()}<div style="height:10px"></div>${this._row('Betriebszustand','operating_state','settings')}${this._row('Heizkreis 1','circuit_state','heat')}
-      <div class="metric-grid" style="margin-top:10px"><div class="metric">${icon('pressure')}<strong>${this._formatSensor('pressure')}</strong><small>Wasserdruck</small></div><div class="metric">${icon('heat')}<strong>${this._formatSensor('flow')}</strong><small>Vorlauf Heizkreis 1</small></div></div>
+      <div class="section" style="margin-top:9px">Systemstatus</div>${this._banner()}<div style="height:10px"></div>${this._row('Betriebszustand','operating_state','settings')}${this._row(this._circuitLabel(),'circuit_state','heat')}
+      <div class="metric-grid" style="margin-top:10px"><div class="metric">${icon('pressure')}<strong>${this._formatSensor('pressure')}</strong><small>Wasserdruck</small></div><div class="metric">${icon('heat')}<strong>${this._formatSensor('flow')}</strong><small>Vorlauf ${esc(this._circuitLabel())}</small></div></div>
       <div class="section">Temperaturen</div>${this._metric('Vorlauf System','system_flow','temp')}${this._metric('Vorlauf Soll','flow_target','temp')}${this._metric('Speicher Warmwasser','tank','water')}${this._metric('Außentemperatur','outdoor','temp')}
       <div class="section">Wartung & Details</div>${this._row('Störungsmeldungen','trouble','info',this._state('trouble')==='on'?'Störung':this._state('trouble')==='off'?'Keine gemeldet':'Nicht verfügbar')}${this._row('Firmware','firmware','info')}${this._row('Firmware-Update','firmware_update','info',this._state('firmware_update')==='on'?'Verfügbar':this._state('firmware_update')==='off'?'Keines gemeldet':'Nicht verfügbar')}
-      ${missing.length?`<div class="availability"><b>Fehlende oder nicht verfügbare Entitäten</b><br>${missing.map(k=>`<code>${esc(this._ids[k])}</code>`).join('<br>')}<br>Bei Bedarf in der Entitätenverwaltung aktivieren. Die Karte kann deaktivierte Entitäten nicht selbst einschalten.</div>`:''}`;
+      ${missing.length?`<div class="availability"><b>Fehlende oder nicht verfügbare Entitäten</b><br>${missing.map(k=>`<code>${esc(this._ids[k] || k+' (nicht zugeordnet)')}</code>`).join('<br>')}<br>Bei Bedarf in der Entitätenverwaltung aktivieren. Die Karte kann deaktivierte Entitäten nicht selbst einschalten.</div>`:''}`;
     }
     _render(){
       if(!this._config||!this._hass)return;
       const page=this._page,tab=['heating','water'].includes(page)?'home':page;
       const contents=page==='home'?this._home():page==='energy'?this._energy():page==='status'?this._status():this._detail(page==='water');
       const notice=this._error||this._notice;
-      this.shadowRoot.innerHTML=`<style>${CSS}</style><ha-card><header class="top"><div><div class="eyebrow">Wärmepumpe</div><div class="title">${esc(this._config.title)}</div></div><div class="outside">${icon('home')}${this._formatSensor('outdoor')}</div></header><main class="body">${notice?`<div class="message ${this._error?'error':''}" role="${this._error?'alert':'status'}"><button data-dismiss aria-label="Hinweis schließen">×</button>${esc(notice)}</div>`:''}${contents}</main><nav class="footer" aria-label="Wärmepumpe">${[['home','Zuhause'],['energy','Energie'],['status','Status']].map(([p,label])=>`<button class="nav ${tab===p?'active':''}" data-page="${p}" ${tab===p?'aria-current="page"':''}>${icon(p)}${label}</button>`).join('')}</nav></ha-card>`;
+      this.shadowRoot.innerHTML=`<style>${CSS}</style><ha-card><header class="top"><div><div class="eyebrow">Wärmepumpe</div><div class="title">${esc(this._config.title)}</div></div><div class="outside">${icon('home')}${this._formatSensor('outdoor')}</div></header><main class="body">${this._discoveryPanel()}${notice?`<div class="message ${this._error?'error':''}" role="${this._error?'alert':'status'}"><button data-dismiss aria-label="Hinweis schließen">×</button>${esc(notice)}</div>`:''}${contents}</main><nav class="footer" aria-label="Wärmepumpe">${[['home','Zuhause'],['energy','Energie'],['status','Status']].map(([p,label])=>`<button class="nav ${tab===p?'active':''}" data-page="${p}" ${tab===p?'aria-current="page"':''}>${icon(p)}${label}</button>`).join('')}</nav></ha-card>`;
     }
     _more(key){const id=this._ids[key];if(!id)return;this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:id},bubbles:true,composed:true}));}
     async _call(key,service,data={}){
@@ -201,6 +360,7 @@
     }
     async _click(event){
       const el=event.target.closest('button');if(!el||el.disabled)return;
+      if(el.hasAttribute('data-discover')){this._discoveryPromise=this._discover(true);return;}
       if(el.hasAttribute('data-page')){this._page=el.dataset.page;this._error=null;this._notice=null;this._render();return;}
       if(el.hasAttribute('data-dismiss')){this._error=null;this._notice=null;this._render();return;}
       if(el.dataset.more){this._more(el.dataset.more);return;}
@@ -217,7 +377,7 @@
         this._pendingTimer=setTimeout(()=>{if(this._pending){this._pending=null;this._notice='Wunschtemperatur noch nicht bestätigt. Angezeigt wird wieder der gemeldete Wert.';this._render();}},45000);
       }
     }
-    async _change(event){const el=event.target;if(!el.dataset.mode)return;const key=el.dataset.mode;await this._call(key,key==='climate'?'set_hvac_mode':'set_operation_mode',key==='climate'?{hvac_mode:el.value}:{operation_mode:el.value});}
+    async _change(event){const el=event.target;if(el.dataset.discovery){if(this._busy)return;this._resetPending();this._notice=null;this._error=null;const key=el.dataset.discovery;if(key==='system')this._selected={system:el.value};else if(key==='zone'){delete this._selected.circuit;this._selected.zone=el.value;}else this._selected[key]=el.value;this._applyDiscovery();this._render();return;}if(!el.dataset.mode)return;const key=el.dataset.mode;await this._call(key,key==='climate'?'set_hvac_mode':'set_operation_mode',key==='climate'?{hvac_mode:el.value}:{operation_mode:el.value});}
   }
   if(!customElements.get('vaillant-app-card'))customElements.define('vaillant-app-card',VaillantAppCard);
   window.customCards=window.customCards||[];
