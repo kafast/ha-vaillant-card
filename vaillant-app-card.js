@@ -1,4 +1,4 @@
-/* Vaillant App Card v1.4.1 — independent custom card, no external dependencies.
+/* Vaillant App Card v1.5.0 — independent custom card, no external dependencies.
  * AI-generated and AI-assisted experimental code. Tests use simulated data;
  * operation on a physical heating system has not been validated. See README. */
 (() => {
@@ -6,7 +6,22 @@
   const REGISTRY_CACHE = new WeakMap();
   const COLOR_SCHEMES = {vaillant:'Vaillant',home_assistant:'Home Assistant',glass:'Glass',graphite:'Graphite',ocean:'Ocean'};
   // German translations; all source messages and identifiers use English.
+  const WIDGET_VIEWS = {dashboard:'Full dashboard',overview:'Overview',heating:'Heating',hot_water:'Hot water',quick_actions:'Quick actions',energy:'Energy',efficiency:'Energy efficiency',system:'System',system_data:'System data'};
+  const CONTROL_MODES = {full:'View and control',admin:'Administrators only',read_only:'View only'};
+  const CONTROL_GROUPS = ['heating','hot_water','quick_actions','settings'];
   const DE = {
+  "Full dashboard": "Vollständiges Dashboard",
+  "View and control": "Anzeigen und bedienen",
+  "Administrators only": "Nur Administratoren",
+  "View only": "Nur anzeigen",
+  "Widget": "Widget",
+  "Controls": "Bedienung",
+  "Section controls": "Bedienung je Bereich",
+  "Use card setting": "Karteneinstellung übernehmen",
+  "Settings": "Einstellungen",
+  "Card controls only; Home Assistant permissions still apply.": "Gilt für die Bedienung dieser Karte; Home-Assistant-Berechtigungen gelten weiterhin.",
+  "Missing energy readings": "Fehlende Energiewerte",
+
   "Not assigned": "Nicht zugeordnet",
   "Disabled in Home Assistant": "In Home Assistant deaktiviert",
   "No numeric reading": "Kein Zahlenwert",
@@ -462,6 +477,8 @@ ha-card.light[data-color-scheme="ocean"]{
  ha-card[data-color-scheme="glass"]{--va-bg:#182333;--va-panel:#202f42;--va-raised:#293c52}
  ha-card.light[data-color-scheme="glass"]{--va-bg:#f4f7fc;--va-panel:#fff;--va-raised:#eaf0f7}
 }
+.hint+.quick-body{margin-top:12px}.target-reading{padding:12px 16px;border-radius:10px;background:var(--va-raised);font-size:25px;text-align:center;font-variant-numeric:tabular-nums}.target-reading span{font-size:14px;color:var(--va-sub)}.energy-diagnostics{margin:14px 0;overflow-wrap:anywhere}.energy-diagnostics code{font-size:10px}div.row,div.stat,div.quick-action{cursor:default}.quick-body+p{margin-top:10px}
+ha-card:not([data-view="dashboard"]) .top{padding:18px 18px 14px}ha-card:not([data-view="dashboard"]) .title{font-size:20px}ha-card:not([data-view="dashboard"]) .eyebrow{display:none}ha-card[data-view="system_data"] .stat:nth-child(n+3){display:block}ha-card[data-view="quick_actions"] .quick-body{grid-template-columns:repeat(3,minmax(0,1fr))}ha-card[data-view="quick_actions"] .quick-action{flex-direction:column;text-align:center;min-height:88px}
   `;
   class VaillantAppCard extends HTMLElement {
     constructor() {
@@ -481,8 +498,15 @@ ha-card.light[data-color-scheme="ocean"]{
       if(config.color_scheme!==undefined && !Object.prototype.hasOwnProperty.call(COLOR_SCHEMES,config.color_scheme)) throw new Error('Unknown color scheme: '+String(config.color_scheme));
       for(const key of ['accent_color','heating_color']) if(config[key]!==undefined && !isHexColor(config[key])) throw new Error(key+' must be a hex color, for example #03a9f4.');
       if(config.language!==undefined && !['auto','en','de'].includes(config.language)) throw new Error('language must be auto, en, or de.');
+      if(config.view!==undefined&&!Object.prototype.hasOwnProperty.call(WIDGET_VIEWS,config.view))throw new Error('Unknown widget view.');
+      if(config.control_mode!==undefined&&!Object.prototype.hasOwnProperty.call(CONTROL_MODES,config.control_mode))throw new Error('Unknown control mode.');
+      if(config.show_header!==undefined&&typeof config.show_header!=='boolean')throw new Error('show_header must be boolean.');
+      if(config.control_modes!==undefined){
+        if(!config.control_modes||typeof config.control_modes!=='object'||Array.isArray(config.control_modes))throw new Error('control_modes must be a mapping.');
+        for(const [group,mode] of Object.entries(config.control_modes))if(!CONTROL_GROUPS.includes(group)||!Object.prototype.hasOwnProperty.call(CONTROL_MODES,mode))throw new Error('Invalid section control mode.');
+      }
       this._customTitle=Object.prototype.hasOwnProperty.call(config,'title');this._customZone=Object.prototype.hasOwnProperty.call(config,'zone_name');
-      this._config={title:'Heat pump', zone_name:'Heating', color_scheme:DEFAULT_COLOR_SCHEME, language:'auto', ...config};
+      this._config={title:'Heat pump', zone_name:'Heating', color_scheme:DEFAULT_COLOR_SCHEME, language:'auto', view:'dashboard', control_mode:'full', ...config};
       this._ids={...emptyIds(), ...(config.entities || {})};
       this._selected={}; this._choices={}; this._registry=null; this._discoveryIssues=[]; this._discoveryError=null; this._discoveryBusy=false;
       this._discoveryToken++; this._resetPending(); this._signature=null;
@@ -495,15 +519,38 @@ ha-card.light[data-color-scheme="ocean"]{
       if(this._config && connection!==this._connection) {
         this._connection=connection; this._discoveryPromise=this._discover();
       }
-      const signature=JSON.stringify([hass.themes?.darkMode,getLanguage(this._config,hass),...Object.values(this._ids).filter(Boolean).map(id=>hass.states[id])]);
+      const signature=JSON.stringify([hass.user?.id,hass.user?.is_admin,hass.themes?.darkMode,getLanguage(this._config,hass),...Object.values(this._ids).filter(Boolean).map(id=>hass.states[id])]);
       if (signature !== this._signature) { this._signature=signature; this._render(); }
     }
     get hass(){return this._hass;}
     _language(){return getLanguage(this._config,this._hass);}
     _t(message){return translate(message,this._language());}
     _format(value,digits=1){return formatNumber(value,digits,this._language());}
-    getCardSize(){return this._page==='home'?10:13;}
-    getGridOptions(){return {columns:'full',min_columns:6,rows:'auto'};}
+    getCardSize(){return ['heating','hot_water','quick_actions','system_data','efficiency'].includes(this._config?.view)?4:this._page==='home'?10:13;}
+    getGridOptions(){return {columns:this._config?.view==='dashboard'?'full':12,min_columns:6,rows:'auto'};}
+    _permits(mode){return mode==='full'||(mode==='admin'&&this._hass?.user?.is_admin===true);}
+    _mayControl(group){return this._permits(this._config?.control_mode || 'full')&&this._permits(this._config?.control_modes?.[group] || 'full');}
+    _keyGroup(key){
+      if(['climate','heating_target','heating_mode'].includes(key))return 'heating';
+      if(['water_heater','water_target'].includes(key))return 'hot_water';
+      if(['boost','ventilation','away'].includes(key))return 'quick_actions';
+      return 'settings';
+    }
+    _canInspect(key){return this._mayControl('settings')&&this._mayControl(this._keyGroup(key));}
+    _accessLabel(group){return !this._mayControl(group)?(this._config.control_mode==='read_only'||this._config.control_modes?.[group]==='read_only'?'View only':'Administrators only'):'';}
+    _widgetContent(){
+      switch(this._config.view){
+        case 'overview':return this._home();
+        case 'heating':return this._offlineNotice()+this._controlPanel(false,true);
+        case 'hot_water':return this._offlineNotice()+this._controlPanel(true,true);
+        case 'quick_actions':return this._offlineNotice()+this._quickActions();
+        case 'energy':return this._energy();
+        case 'efficiency':return `<section class="energy-total secondary"><small>${icon('leaf')}Energy efficiency</small><strong>${this._format(this._num('efficiency'),2)}</strong><p>Reported value for heating and hot water</p></section>`;
+        case 'system':return this._status();
+        case 'system_data':return this._systemData();
+        default:return this._page==='home'?this._home():this._page==='energy'?this._energy():this._page==='status'?this._status():this._detail(this._page==='water');
+      }
+    }
     static getConfigElement(){return document.createElement('vaillant-app-card-editor');}
     static getStubConfig(){return {type:'custom:vaillant-app-card'};}
     disconnectedCallback(){this._resetPending();}
@@ -537,7 +584,7 @@ ha-card.light[data-color-scheme="ocean"]{
       const pinned={system:'system_id',zone:'zone',water:'water',circuit:'circuit',energy_device:'energy_device_id'};
       const selectors=Object.entries(this._choices||{}).filter(([key,items])=>items.length>1 && this._config[pinned[key]]===undefined).map(([key,items])=>
         `<label class="row"><span>${this._t(titles[key])}</span><select data-discovery="${key}" aria-label="${this._t(titles[key])} selection" ${this._busy?'disabled':''}><option value="" disabled ${this._selected[key]===undefined?'selected':''}>Select an option</option>${items.map(i=>`<option data-no-localize value="${esc(i.value)}" ${String(this._selected[key])===String(i.value)?'selected':''}>${esc(key==='circuit'?this._t(i.label):i.label)}${i.disabled?this._t(' (disabled)'):''}</option>`).join('')}</select></label>`).join('');
-      return `${this._discoveryBusy?'<div class="small muted" role="status">Matching myVAILLANT entities …</div>':''}${this._discoveryError?`<div class="message error">${esc(this._discoveryError)}</div>`:''}${selectors}${this._discoveryIssues?.length?`<div class="availability">${this._discoveryIssues.map(esc).join('<br>')}</div>`:''}${this._discoveryError || this._discoveryIssues?.length || this._page==='status'?'<button class="row" data-discover>Discover entities again</button>':''}`;
+      return `${this._discoveryBusy?'<div class="small muted" role="status">Matching myVAILLANT entities …</div>':''}${this._discoveryError?`<div class="message error">${esc(this._discoveryError)}</div>`:''}${selectors}${this._discoveryIssues?.length?`<div class="availability">${this._discoveryIssues.map(esc).join('<br>')}</div>`:''}${this._discoveryError || this._discoveryIssues?.length || this._page==='status' || this._config.view==='system'?'<button class="row" data-discover>Discover entities again</button>':''}`;
     }
     _entity(key){return this._hass?.states[this._ids[key]];}
     _ok(key){const s=this._entity(key);return !!s && !['unavailable','unknown'].includes(s.state);}
@@ -558,13 +605,13 @@ ha-card.light[data-color-scheme="ocean"]{
     }
     _formatSensor(key,digits=1){const e=this._entity(key);return this._num(key)===null?'—':`${this._format(e.state,digits)}${e.attributes.unit_of_measurement?' '+esc(e.attributes.unit_of_measurement):''}`;}
     _offline(){return this._state('online')==='off';}
-    _canTemp(water){const k=water?'water_heater':'climate';return this._ok(k)&&!this._offline()&&((Number(this._attr(k,'supported_features'))&1)===1)&&this._target(water)!==null;}
-    _row(label,key,ic='info',value=null){return `<button class="row" data-more="${esc(key)}">${icon(ic)}<span>${esc(label)}</span><span class="value">${value===null?esc(this._state(key)===null?'Unavailable':modeName(this._state(key))):value}${icon('arrow')}</span></button>`;}
-    _metric(label,key,ic,digits=1){return `<button class="row" data-more="${esc(key)}">${icon(ic)}<span>${esc(label)}</span><span class="value">${this._formatSensor(key,digits)}${icon('arrow')}</span></button>`;}
-    _toggle(label,key,ic){const on=this._state(key)==='on';return `<button class="quick-action ${on?'on':''}" data-toggle="${key}" aria-pressed="${on}" ${!this._ok(key)||this._busy||this._offline()?'disabled':''}>${icon(ic)}<span class="action-label">${esc(label)}</span><span class="action-state">${on?'Active':'Off'}</span></button>`;}
+    _canTemp(water){const k=water?'water_heater':'climate';return this._mayControl(water?'hot_water':'heating')&&this._ok(k)&&!this._offline()&&((Number(this._attr(k,'supported_features'))&1)===1)&&this._target(water)!==null;}
+    _row(label,key,ic='info',value=null){const interactive=this._canInspect(key),tag=interactive?'button':'div';if(!interactive&&value==='Open')value=null;return `<${tag} class="row" ${interactive?`data-more="${esc(key)}"`:''}>${icon(ic)}<span>${esc(label)}</span><span class="value">${value===null?esc(this._state(key)===null?'Unavailable':modeName(this._state(key))):value}${interactive?icon('arrow'):''}</span></${tag}>`;}
+    _metric(label,key,ic,digits=1){return this._row(label,key,ic,this._formatSensor(key,digits));}
+    _toggle(label,key,ic){const on=this._state(key)==='on',interactive=this._mayControl('quick_actions'),tag=interactive?'button':'div';return `<${tag} class="quick-action ${on?'on':''}" ${interactive?`data-toggle="${key}" aria-pressed="${on}" ${!this._ok(key)||this._busy||this._offline()?'disabled':''}`:''}>${icon(ic)}<span class="action-label">${esc(label)}</span><span class="action-state">${!this._ok(key)?this._availability(key):on?'Active':'Off'}</span></${tag}>`;}
     _banner(){
       if(this._offline())return this._offlineNotice()+(this._state('trouble')==='on'?this._row('Fault details','trouble','info','Fault'):'');
-      if(this._state('trouble')==='on')return `<button class="row" data-more="trouble">${icon('info')}<span class="warnmark">System reports a fault</span><span class="value">${icon('arrow')}</span></button>`;
+      if(this._state('trouble')==='on')return this._row('System reports a fault','trouble','info','Fault');
       if(this._state('online')==='on'&&this._state('trouble')==='off')return `<div class="status-line">${icon('check')}No fault reported by the system</div>`;
       return `<div class="status-line neutral">${icon('info')}System status is not fully available</div>`;
     }
@@ -572,6 +619,7 @@ ha-card.light[data-color-scheme="ocean"]{
       const key=water?'water_heater':'climate';
       const modes=this._attr(key,water?'operation_list':'hvac_modes') || [];
       const active=water?this._attr(key,'operation_mode'):this._state(key);
+      if(!this._mayControl(water?'hot_water':'heating'))return this._row('Operating mode',key,'settings',esc(modeName(active)));
       if(!Array.isArray(modes)||!modes.length)return this._row('Operating mode',key,'settings');
       const disabled=!this._ok(key)||this._busy||this._offline()||(water&&!(Number(this._attr(key,'supported_features'))&2));
       return `<label class="row">${icon('settings')}<span>Operating mode</span><select data-mode="${key}" aria-label="Operating mode ${water?this._t('Hot water'):this._t('Heating')}" ${disabled?'disabled':''}>${modes.includes(active)?'':`<option selected disabled value="">${esc(modeName(active))}</option>`}${modes.map(m=>`<option value="${esc(m)}" ${m===active?'selected':''}>${esc(modeName(m))}</option>`).join('')}</select></label>`;
@@ -593,32 +641,32 @@ ha-card.light[data-color-scheme="ocean"]{
       if(this._target(water)===null)return 'No target temperature reported.';
       return '';
     }
-    _offlineNotice(){return this._offline()?`<button class="row" data-more="online">${icon('info')}<span>Online sensor reports offline. Controls are disabled; open the sensor to check its state.</span>${icon('arrow')}</button>`:'';}
+    _offlineNotice(){return this._offline()?this._row('Online sensor reports offline. Controls are disabled; open the sensor to check its state.','online','info',''):'';}
     _circuitLabel(){return this._selected.circuit===undefined?'Heating circuit':`Heating circuit ${Number(this._selected.circuit)+1}`;}
     _stat(label,key,ic,digits=1) {
-      return `<button class="stat" data-more="${esc(key)}"><small>${icon(ic)}${esc(label)}</small><strong>${this._formatSensor(key,digits)}</strong></button>`;
+      const interactive=this._canInspect(key),tag=interactive?'button':'div';
+      return `<${tag} class="stat" ${interactive?`data-more="${esc(key)}"`:''}><small>${icon(ic)}${esc(label)}</small><strong>${this._formatSensor(key,digits)}</strong></${tag}>`;
     }
+    _quickActions(){return `<section class="surface"><div class="section">Quick actions</div>${this._accessLabel('quick_actions')?`<p class="hint">${this._accessLabel('quick_actions')}</p>`:''}<div class="quick-body">${this._toggle('Hot-water boost','boost','water')}${this._toggle('Ventilation boost','ventilation','wind')}${this._toggle('Away','away','home')}</div></section>`;}
+    _systemData(){return `<section class="surface"><div class="section">System data</div><div class="overview-stats">${this._stat('Flow temperature','flow','heat')}${this._stat('Water pressure','pressure','pressure')}${this._stat('Outside','outdoor','temp')}${this._stat('Efficiency','efficiency','leaf',2)}</div>${this._config.view==='dashboard'?`<button class="aside-link" data-page="status">All system data${icon('arrow')}</button>`:''}</section>`;}
     _home(){return `${this._offlineNotice()}<div class="overview">
       <div class="control-grid">${this._controlPanel(false)}${this._controlPanel(true)}</div>
-      <aside class="overview-aside">
-        <section class="surface"><div class="section">Quick actions</div><div class="quick-body">${this._toggle('Hot-water boost','boost','water')}${this._toggle('Ventilation boost','ventilation','wind')}${this._toggle('Away','away','home')}</div></section>
-        <section class="surface"><div class="section">System data</div><div class="overview-stats">${this._stat('Flow temperature','flow','heat')}${this._stat('Water pressure','pressure','pressure')}${this._stat('Outside','outdoor','temp')}${this._stat('Efficiency','efficiency','leaf',2)}</div><button class="aside-link" data-page="status">All system data${icon('arrow')}</button></section>
-      </aside></div>`;}
+      <aside class="overview-aside">${this._quickActions()}${this._systemData()}</aside></div>`;}
     _controlPanel(water,detail=false) {
       const key=water?'water_heater':'climate',name=water?this._t('Hot water'):this._customZone?this._config.zone_name:this._t('Heating');
       const target=this._target(water),current=this._current(water);
       const mode=water?this._attr(key,'operation_mode') || this._state(key):this._state('heating_mode') || this._state(key);
       const humidity=this._first(this._attr('climate','current_humidity'),this._num('humidity'));
       const min=numeric(this._attr(key,'min_temp')),max=numeric(this._attr(key,'max_temp'));
-      const blocked=!this._canTemp(water)||this._busy;
+      const blocked=!this._canTemp(water)||this._busy,interactive=this._mayControl(water?'hot_water':'heating');
       return `<article class="control-panel ${water?'water':'heating'}" aria-label="${esc(name)}" data-preserve-aria>
         <div class="control-head"><div class="control-title">${icon(water?'water':'heat')}<h3 data-no-localize>${esc(name)}</h3></div><span class="mode-pill">${esc(modeName(mode))}</span></div>
         <div class="reading"><div class="temperature"><strong>${this._format(current)}</strong><span class="unit">°C</span><div class="temperature-label">${water?'Tank temperature':'Room temperature'}</div></div><div class="secondary-reading">${water?icon('water'):`${this._format(humidity,0)} %`}<small>${water?'Current reading':'Humidity'}</small></div></div>
         <div class="setpoint-label"><span>Target temperature</span>${this._pendingTemps?.[key]?'<span class="pending" role="status">Awaiting confirmation …</span>':''}</div>
-        <div class="stepper"><button data-step="-1" data-control="${key}" aria-label="${esc(name)}: ${esc(this._t('Decrease target temperature'))}" data-preserve-aria ${blocked||(min!==null&&target<=min)?'disabled':''}>−</button><output aria-label="${esc(name)}: ${esc(this._t('Target temperature'))}" data-preserve-aria>${this._format(target)}<span>°C</span></output><button data-step="1" data-control="${key}" aria-label="${esc(name)}: ${esc(this._t('Increase target temperature'))}" data-preserve-aria ${blocked||(max!==null&&target>=max)?'disabled':''}>+</button></div>
+        ${interactive?`<div class="stepper"><button data-step="-1" data-control="${key}" aria-label="${esc(name)}: ${esc(this._t('Decrease target temperature'))}" data-preserve-aria ${blocked||(min!==null&&target<=min)?'disabled':''}>−</button><output aria-label="${esc(name)}: ${esc(this._t('Target temperature'))}" data-preserve-aria>${this._format(target)}<span>°C</span></output><button data-step="1" data-control="${key}" aria-label="${esc(name)}: ${esc(this._t('Increase target temperature'))}" data-preserve-aria ${blocked||(max!==null&&target>=max)?'disabled':''}>+</button></div>`:`<div class="target-reading">${this._format(target)}<span> °C</span></div><p class="hint">${this._accessLabel(water?'hot_water':'heating')}</p>`}
         <div class="control-mode ${detail?'':'desktop-mode'}">${this._modeSelect(water)}</div>
-        ${detail?'':`<button class="details-button" data-page="${water?'water':'heating'}" aria-label="${esc(name)}: ${esc(this._t('Open settings'))}" data-preserve-aria>Mode & settings${icon('arrow')}</button>`}
-        ${this._temperatureReason(water)?`<p class="hint">${esc(this._temperatureReason(water))}</p>`:''}${detail?this._offlineNotice():''}
+        ${detail||this._config.view!=='dashboard'?'':`<button class="details-button" data-page="${water?'water':'heating'}" aria-label="${esc(name)}: ${esc(this._t('Open settings'))}" data-preserve-aria>Mode & settings${icon('arrow')}</button>`}
+        ${interactive&&this._temperatureReason(water)?`<p class="hint">${esc(this._temperatureReason(water))}</p>`:''}${detail&&this._config.view==='dashboard'?this._offlineNotice():''}
       </article>`;
     }
     _detail(water){return `<div class="page-heading"><button class="back" data-page="home">${icon('back')}Overview</button><small>${water?this._t('Hot water'):this._t('Heating')} settings</small></div>
@@ -629,7 +677,7 @@ ha-card.light[data-color-scheme="ocean"]{
       </div></div>`;}
     _energyKeys(){return ['electric_heating','electric_water','environment_heating','environment_water','heat_heating','heat_water','hydraulic_electric','hydraulic_heat'];}
     _energy(){const a=this._energyValue('electric_heating'),b=this._energyValue('electric_water');return `
-      <div class="page-heading"><h2>Energy overview</h2><small>Sensor readings</small></div>${this._energyKeys().some(k=>this._energyValue(k)===null)?'<button class="row" data-page="status">Some energy readings are missing. Open System for assignment and availability details.</button>':''}
+      <div class="page-heading"><h2>Energy overview</h2><small>Sensor readings</small></div>${this._energyKeys().some(k=>this._energyValue(k)===null)?this._config.view==='dashboard'?'<button class="row" data-page="status">Some energy readings are missing. Open System for assignment and availability details.</button>':this._energyDiagnostics():''}
       <div class="energy-summary"><section class="energy-total"><small>${icon('energy')}Electrical energy</small><strong>${this._format(a===null||b===null?null:a+b,2)}<span>kWh</span></strong><p>Heating and hot water · Energy device</p></section><section class="energy-total secondary"><small>${icon('leaf')}Energy efficiency</small><strong>${this._format(this._num('efficiency'),2)}</strong><p>Reported value for heating and hot water</p></section></div>
       <div class="energy-grid">
         <section class="surface"><div class="section">Electrical energy</div>${this._energyRow('Heating','electric_heating','heat')}${this._energyRow('Hot water','electric_water','water')}</section>
@@ -637,26 +685,27 @@ ha-card.light[data-color-scheme="ocean"]{
         <section class="surface"><div class="section">Heat output</div>${this._energyRow('Heating','heat_heating','heat')}${this._energyRow('Hot water','heat_water','water')}</section>
         <section class="surface"><div class="section">Hydraulic station · separate</div>${this._energyRow('Heating electrical energy','hydraulic_electric','energy')}${this._energyRow('Heating heat output','hydraulic_heat','heat')}</section>
       </div><p class="hint">Period and freshness depend on the integration. The hydraulic station is shown separately.</p>`;}
+    _energyDiagnostics(){const missing=this._energyKeys().filter(k=>this._energyValue(k)===null);return missing.length?`<section class="surface energy-diagnostics"><div class="section">Energy entity diagnostics</div>${missing.map(k=>`<div class="hint"><code>${esc(k)}</code>: ${esc(this._t(this._availability(k)))}${this._ids[k]?`<br><code>${esc(this._ids[k])}</code>`:''}</div>`).join('')}</section>`:'';}
     _status(){const required=['climate','water_heater','online','trouble','outdoor','flow','pressure'];const missing=required.filter(k=>!this._ok(k));return `
       <div class="page-heading"><h2>System & maintenance</h2><small>System overview</small></div><div class="status-grid">
         <section class="surface"><div class="section">System status</div>${this._banner()}${this._row('Cloud connection','online','info',this._state('online')==='on'?'Connected':this._state('online')==='off'?'Disconnected':'Unavailable')}${this._row('Operating state','operating_state','settings')}${this._row(this._circuitLabel(),'circuit_state','heat')}</section>
         <section class="surface"><div class="section">System data</div>${this._metric('Water pressure','pressure','pressure')}${this._metric('Flow temperature '+this._circuitLabel(),'flow','heat')}${this._metric('Target flow temperature','flow_target','temp')}${this._metric('System flow temperature','system_flow','temp')}</section>
         <section class="surface"><div class="section">Temperatures</div>${this._metric('Room temperature','room','home')}${this._metric('Hot-water tank','tank','water')}${this._metric('Outdoor temperature','outdoor','temp')}</section>
         <section class="surface"><div class="section">Maintenance</div>${this._row('Fault details','trouble','info',this._state('trouble')==='on'?'Fault':this._state('trouble')==='off'?'None reported':'Unavailable')}${this._row('Firmware','firmware','info')}${this._row('Firmware update','firmware_update','info',this._state('firmware_update')==='on'?'Available':this._state('firmware_update')==='off'?'None reported':'Unavailable')}</section>
-      </div>${this._energyKeys().some(k=>this._energyValue(k)===null)?`<section class="surface"><div class="section">Energy entity diagnostics</div>${this._energyKeys().filter(k=>this._energyValue(k)===null).map(k=>`<div class="hint"><code>${esc(k)}</code>: ${esc(this._t(this._availability(k)))}${this._ids[k]?`<br><code>${esc(this._ids[k])}</code>`:''}</div>`).join('')}</section>`:''}${missing.length?`<div class="availability"><b>Missing or unavailable entities</b><br>${missing.map(k=>`<code>${esc(this._ids[k] || k+' (not assigned)')}</code>`).join('<br>')}<br>Enable them in entity settings if needed.</div>`:''}`;
+      </div>${this._energyDiagnostics()}${missing.length?`<div class="availability"><b>Missing or unavailable entities</b><br>${missing.map(k=>`<code>${esc(this._ids[k] || k+' (not assigned)')}</code>`).join('<br>')}<br>Enable them in entity settings if needed.</div>`:''}`;
     }
     _render(){
       if(!this._config||!this._hass)return;
       const page=this._page,tab=['heating','water'].includes(page)?'home':page;
-      const contents=page==='home'?this._home():page==='energy'?this._energy():page==='status'?this._status():this._detail(page==='water');
+      const contents=this._widgetContent();
       const notice=this._error||this._notice;
       const accents=[this._config.accent_color?'--va-green:'+this._config.accent_color+';':'',this._config.heating_color?'--va-orange:'+this._config.heating_color+';':''].join('');
-      this.shadowRoot.innerHTML=`<style>${CSS}</style><ha-card lang="${this._language()}" data-color-scheme="${esc(this._config.color_scheme)}" style="${accents}" class="${this._hass.themes?.darkMode===false?'light':'dark'}"><header class="top"><div><div class="eyebrow">Heating & hot water</div><div class="title" data-no-localize>${esc(this._customTitle?this._config.title:this._t('Heat pump'))}</div></div><div class="outside">${icon('temp')}<div><small>Outdoor temperature</small>${this._formatSensor('outdoor')}</div></div></header><main class="body"><div class="discovery">${this._discoveryPanel()}</div>${notice?`<div class="message ${this._error?'error':''}" role="${this._error?'alert':'status'}"><button data-dismiss aria-label="Dismiss message">×</button>${esc(notice)}</div>`:''}${contents}</main><nav class="footer" aria-label="Heat pump">${[['home','Overview'],['energy','Energy'],['status','System']].map(([p,label])=>`<button class="nav ${tab===p?'active':''}" data-page="${p}" ${tab===p?'aria-current="page"':''}>${icon(p)}${label}</button>`).join('')}</nav></ha-card>`;
+      this.shadowRoot.innerHTML=`<style>${CSS}</style><ha-card lang="${this._language()}" data-color-scheme="${esc(this._config.color_scheme)}" style="${accents}" data-view="${this._config.view}" class="${this._hass.themes?.darkMode===false?'light':'dark'}">${this._config.show_header===false?'':`<header class="top"><div><div class="eyebrow">Heating & hot water</div><div class="title" data-no-localize>${esc(this._customTitle?this._config.title:this._t(this._config.view==='dashboard'?'Heat pump':WIDGET_VIEWS[this._config.view]))}</div></div>${this._config.view==='dashboard'?`<div class="outside">${icon('temp')}<div><small>Outdoor temperature</small>${this._formatSensor('outdoor')}</div></div>`:''}</header>`}<main class="body"><div class="discovery">${this._discoveryPanel()}</div>${notice?`<div class="message ${this._error?'error':''}" role="${this._error?'alert':'status'}"><button data-dismiss aria-label="Dismiss message">×</button>${esc(notice)}</div>`:''}${contents}</main>${this._config.view==='dashboard'?`<nav class="footer" aria-label="Heat pump">${[['home','Overview'],['energy','Energy'],['status','System']].map(([p,label])=>`<button class="nav ${tab===p?'active':''}" data-page="${p}" ${tab===p?'aria-current="page"':''}>${icon(p)}${label}</button>`).join('')}</nav>`:''}</ha-card>`;
       localize(this.shadowRoot,this._language());
     }
-    _more(key){const id=this._ids[key];if(!id)return;this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:id},bubbles:true,composed:true}));}
+    _more(key){const id=this._ids[key];if(!id||!this._canInspect(key))return;this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:id},bubbles:true,composed:true}));}
     async _call(key,service,data={}){
-      if(this._busy||!this._ok(key)||this._offline())return false;
+      if(!this._mayControl(this._keyGroup(key))||this._busy||!this._ok(key)||this._offline())return false;
       this._busy=true;this._error=null;this._notice=null;this._render();
       try{await this._hass.callService(this._ids[key].split('.')[0],service,{entity_id:this._ids[key],...data});this._notice='Sent. The myVAILLANT integration may take a moment to confirm the change.';return true;}
       catch(e){this._error=`Change not applied: ${e?.message||String(e)}`;return false;}
@@ -665,7 +714,7 @@ ha-card.light[data-color-scheme="ocean"]{
     async _click(event){
       const el=event.target.closest('button');if(!el||el.disabled)return;
       if(el.hasAttribute('data-discover')){this._discoveryPromise=this._discover(true);return;}
-      if(el.hasAttribute('data-page')){this._page=el.dataset.page;this._error=null;this._notice=null;this._render();return;}
+      if(el.hasAttribute('data-page')){if(this._config.view!=='dashboard')return;this._page=el.dataset.page;this._error=null;this._notice=null;this._render();return;}
       if(el.hasAttribute('data-dismiss')){this._error=null;this._notice=null;this._render();return;}
       if(el.dataset.more){this._more(el.dataset.more);return;}
       if(el.dataset.toggle){const k=el.dataset.toggle;await this._call(k,this._state(k)==='on'?'turn_off':'turn_on');return;}
@@ -689,7 +738,15 @@ ha-card.light[data-color-scheme="ocean"]{
     set hass(hass){const previous=getLanguage(this._config,this._hass);this._hass=hass;if(previous!==getLanguage(this._config,hass))this._render();}
     _change(event){
       const key=event.target.dataset.key,value=event.target.value;
-      if(!['title','zone_name','color_scheme','accent_color','heating_color','language'].includes(key))return;
+      if(key.startsWith('control_modes.')){
+        const group=key.slice('control_modes.'.length);if(!CONTROL_GROUPS.includes(group)||(value&&!Object.prototype.hasOwnProperty.call(CONTROL_MODES,value)))return;
+        const modes={...this._config.control_modes};if(value)modes[group]=value;else delete modes[group];
+        this._config={...this._config,type:this._config.type || 'custom:vaillant-app-card',control_modes:modes};
+        this.dispatchEvent(new CustomEvent('config-changed',{detail:{config:{...this._config,control_modes:{...modes}}},bubbles:true,composed:true}));this._render();return;
+      }
+      if(!['title','zone_name','color_scheme','accent_color','heating_color','language','view','control_mode'].includes(key))return;
+      if(key==='view'&&!Object.prototype.hasOwnProperty.call(WIDGET_VIEWS,value))return;
+      if(key==='control_mode'&&!Object.prototype.hasOwnProperty.call(CONTROL_MODES,value))return;
       if(key==='language'&&!['auto','en','de'].includes(value))return;
       if(key==='color_scheme'&&!Object.prototype.hasOwnProperty.call(COLOR_SCHEMES,value))return;
       if(['accent_color','heating_color'].includes(key)&&value.trim()&&!isHexColor(value.trim())){
@@ -703,9 +760,11 @@ ha-card.light[data-color-scheme="ocean"]{
     }
     _render(){
       const field=(key,label,placeholder)=>`<label>${label}<input data-key="${key}" value="${esc(this._config[key] || '')}" placeholder="${placeholder}" spellcheck="false"></label>`;
+      const select=(key,label,options,selected)=>`<label>${label}<select data-key="${key}">${Object.entries(options).map(([value,text])=>`<option value="${value}" ${value===selected?'selected':''}>${text}</option>`).join('')}</select></label>`;
       this.shadowRoot.innerHTML=`<style>
         :host{display:block;color:var(--primary-text-color,#212121);font-family:inherit}*{box-sizing:border-box}.fields{display:grid;gap:16px;padding:8px 0}label{display:grid;gap:7px;font-size:13px}input,select{font:inherit;color:inherit;min-height:44px;border:1px solid var(--divider-color,#ccc);border-radius:8px;background:var(--card-background-color,#fff);padding:10px 12px;width:100%}input:focus-visible,select:focus-visible{outline:2px solid var(--primary-color,#03a9f4);outline-offset:2px}.pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}p{font-size:12px;line-height:1.6;margin:0;color:var(--secondary-text-color,#666)}.error{color:var(--error-color,#b3261e)}@media(max-width:500px){.pair{grid-template-columns:1fr}}
         </style><div class="fields" lang="${getLanguage(this._config,this._hass)}">
+        ${select('view','Widget',WIDGET_VIEWS,this._config.view || 'dashboard')}${select('control_mode','Controls',CONTROL_MODES,this._config.control_mode || 'full')}<details><summary>Section controls</summary><div class="pair">${CONTROL_GROUPS.map(group=>select('control_modes.'+group,({heating:'Heating',hot_water:'Hot water',quick_actions:'Quick actions',settings:'Settings'})[group],{'':'Use card setting',...CONTROL_MODES},this._config.control_modes?.[group] || '')).join('')}</div></details><p>Card controls only; Home Assistant permissions still apply.</p>
         <div class="pair">${field('title','Title','Heat pump')}${field('zone_name','Heating name','Heating')}</div>
         <label>Language<select data-key="language">${[['auto','Automatic (Home Assistant)'],['de','German'],['en','English']].map(([value,label])=>`<option value="${value}" ${value===(this._config.language || 'auto')?'selected':''}>${label}</option>`).join('')}</select></label>
         <label>Color scheme<select data-key="color_scheme">${Object.entries(COLOR_SCHEMES).map(([key,name])=>`<option value="${key}" ${key===(this._config.color_scheme || DEFAULT_COLOR_SCHEME)?'selected':''}>${name}</option>`).join('')}</select></label>

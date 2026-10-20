@@ -10,3 +10,15 @@ type: custom:vaillant-app-card
 # Optional custom accent colors; quote hex values:
 # accent_color: "#03a9f4"
 # heating_color: "#ff9800"
+# Widget: dashboard (default), overview, heating, hot_water, quick_actions,
+# energy, efficiency, system, system_data
+# view: heating
+# Control mode: full (default), admin, read_only
+# control_mode: admin
+# Optional additional section restrictions (cannot relax the global mode):
+# control_modes:
+#   hot_water: admin
+#   quick_actions: admin
+#   settings: admin
+# UI restrictions only; Home Assistant authorization still applies.
+# show_header: false

@@ -89,7 +89,7 @@ HACS normally manages the resource automatically. If missing under **Settings �
 
 1. Download [`vaillant-app-card.js`](https://raw.githubusercontent.com/kafast/ha-vaillant-card/main/vaillant-app-card.js).
 2. Copy it to `/config/www/vaillant-app-card.js`; create `www` if needed.
-3. Under **Settings → Dashboards → Resources**, add `/local/vaillant-app-card.js?v=1.4.1` as a **JavaScript module**.
+3. Under **Settings → Dashboards → Resources**, add `/local/vaillant-app-card.js?v=1.4.0` as a **JavaScript module**.
 4. Reload the frontend.
 
 Enable advanced mode in your user profile if Resources is hidden. A newly created `www` directory may require an HA restart before its files become accessible.
@@ -102,7 +102,7 @@ Add to the existing resource configuration:
 ```yaml
 lovelace:
   resources:
-    - url: /local/vaillant-app-card.js?v=1.4.1
+    - url: /local/vaillant-app-card.js?v=1.4.0
       type: module
 ```
 
@@ -202,6 +202,10 @@ Use the visual editor for labels, language and colors. Entity assignments and fi
 | `type` | String | required | `custom:vaillant-app-card` |
 | `title` | String | localized | Card heading; custom text is preserved |
 | `zone_name` | String | localized | Heating view name; custom text is preserved |
+| `view` | String | `dashboard` | Full dashboard or individual widget; see below |
+| `control_mode` | String | `full` | `full`, `admin` or `read_only` |
+| `control_modes` | Object | `{}` | Additional rules for `heating`, `hot_water`, `quick_actions`, `settings` |
+| `show_header` | Boolean | `true` | Show the card heading |
 | `language` | String | `auto` | HA language; override with `de` or `en`. Other HA languages fall back to English. |
 | `color_scheme` | String | `home_assistant` | `home_assistant`, `vaillant`, `glass`, `graphite`, `ocean` |
 | `accent_color` | String | scheme/theme | Optional general accent hex color |
@@ -214,6 +218,92 @@ Use the visual editor for labels, language and colors. Entity assignments and fi
 | `water` | Integer | automatic/selection | Technical hot-water tank index |
 | `energy_device_id` | String | automatic/selection | HA device ID for energy readings |
 | `entities` | Object | `{}` | Override individual assignments |
+
+## Individual widgets and control modes
+
+![Widgets](docs/widgets.jpg)
+
+*Example widgets using invented data: heating with controls, hot water for viewing only, and quick actions restricted to administrators (shown for a regular user).*
+
+The full dashboard remains the default. Use `view` to place individual areas as separate dashboard cards. Discovery still runs automatically; widgets share the registry request and do not add Vaillant cloud requests.
+
+| `view` | Content |
+| --- | --- |
+| `dashboard` | Full card with navigation; default |
+| `overview` | Overview without tab navigation |
+| `heating` | Heating display with optional temperature and operating-mode controls |
+| `hot_water` | Hot-water display with optional temperature and operating-mode controls |
+| `quick_actions` | Hot-water boost, ventilation boost and away mode |
+| `energy` | Energy overview with missing-reading diagnostics |
+| `efficiency` | A single efficiency reading from the integration |
+| `system` | Full system and maintenance view |
+| `system_data` | Compact flow temperature, pressure, outdoor temperature and efficiency |
+
+Heating widget with controls for administrators only:
+
+```yaml
+type: custom:vaillant-app-card
+view: heating
+control_mode: admin
+```
+
+Hot-water widget for viewing only, with no temperature buttons or mode selector:
+
+```yaml
+type: custom:vaillant-app-card
+view: hot_water
+control_mode: read_only
+```
+
+Single efficiency widget:
+
+```yaml
+type: custom:vaillant-app-card
+view: efficiency
+control_mode: read_only
+```
+
+Use `show_header: false` to hide the card heading. Custom titles, language, colors and entity overrides also work with widgets. The visual editor supports widget selection, the general control mode and section rules.
+
+### Viewing and controlling
+
+| `control_mode` | Behavior |
+| --- | --- |
+| `full` | View and control where supported by the entity and integration; default |
+| `admin` | Only signed-in HA administrators see controls; everyone else sees readings |
+| `read_only` | Display only for everyone, including administrators |
+
+Display mode removes controls. The card sends no control commands and does not open native entity dialogs that could expose settings. Navigation and local system selection remain available. Missing user information does not grant admin access.
+
+Section rules can further restrict the general mode:
+
+```yaml
+type: custom:vaillant-app-card
+control_mode: full
+control_modes:
+  heating: full
+  hot_water: admin
+  quick_actions: admin
+  settings: admin
+```
+
+- `heating`: Heating setpoint and operating mode.
+- `hot_water`: Hot-water setpoint and operating mode.
+- `quick_actions`: Hot-water boost, ventilation boost and away mode, including detail views.
+- `settings`: Opening native entity dialogs for settings and readings.
+
+Section rules cannot relax the global mode: `control_mode: read_only` still prevents controls when `heating: full` is set. A change of HA user updates the presentation.
+
+> [!IMPORTANT]
+> **This restricts operation within this card; it is not server-side access control.** It does not block other dashboards, HA dialogs or direct service calls. Anyone able to edit the card configuration can change these rules. Actual permissions must be enforced through Home Assistant authentication and authorization. Separate viewing and control dashboards alone do not create server-side restrictions either.
+
+### Missing controls or energy readings
+
+Control is supported in principle. When the online sensor is `off`, the card blocks commands and explains why. Unavailable control entities, missing temperature support and setpoint limits can also disable individual controls. Compare the online sensor's raw state and control through HA's native entity dialog before attributing the failure to a particular component.
+
+The card displays energy sensors provided by the integration. If they are already `unavailable` in HA, the card cannot derive energy from them. A numeric 0 is shown as 0; that alone does not reveal whether Vaillant has supplied current data. Efficiency can remain available independently. It is the reported integration value, not an instantaneous COP measurement calculated by this card.
+
+Missing or stale energy readings despite a working official app have been [reported upstream](https://github.com/signalkraft/mypyllant-component/discussions/374). [Release notes](https://github.com/signalkraft/mypyllant-component/releases) document energy-import improvements in 0.9.17 and statistics fixes in 0.9.18. Check your installed integration version and logs; an older report does not establish the cause on your system.
 
 ### Language and custom labels
 
@@ -315,7 +405,6 @@ A successfully sent command does not confirm that the equipment applied it. The 
 
 **Manual:** Replace the JavaScript file and change the resource URL's version parameter to invalidate the browser cache.
 
-- **1.4.1:** Match energy names without HA device prefixes and recover circuit association from original device names. Show offline control-block reasons and energy assignment/availability diagnostics.
 - **1.4.0:** English source messages; English/German UI, editor language selection and bilingual documentation. Prominent AI-generation and test-limit notices.
 - **1.3.1:** Home Assistant is the default scheme, including in the editor. Set `color_scheme: vaillant` for the earlier appearance.
 - **1.3.0:** Five color schemes, theme colors, glass appearance and visual editor.
@@ -330,7 +419,6 @@ A successfully sent command does not confirm that the equipment applied it. The 
 | No system found | Check that the myVAILLANT integration is loaded and uses `mypyllant`; select a system if prompted. |
 | Automatic matching fails | Retry discovery. If the session cannot read the registry, use local `entities` assignments. |
 | Missing values / “—” | Filter **Settings → Devices & services → Entities** for myVAILLANT, show disabled entities and enable those required. |
-| Online sensor reports offline | The card blocks commands when the mapped online sensor is `off`. Open that sensor to inspect its raw state; other readings can still be present. Check the integration and compare control through HA's native entity dialog. |
 | Disabled temperature buttons | Check control entity availability, temperature support, limits, pending commands and offline state. |
 | Old UI after updating | Redownload in HACS, reload the frontend, check cache and remove duplicate resources. |
 | Missing or stale energy data | Check energy entities directly in HA and select the energy device if prompted. Periods and refresh rates depend on the integration. |
@@ -355,7 +443,7 @@ node --test tests/discovery.test.cjs
 node --check vaillant-app-card.js
 ```
 
-Simulated checks cover discovery, independent temperature confirmations, service targets, container layouts, color schemes, the editor and browser rendering. Layouts have been checked at 320, 390, 820 and 1400 px viewport widths and with a narrow card in a wide desktop window. Language checks cover selection, fallback, labels and preserved custom names. **These checks are limited and do not establish compatibility with every HA version, browser, theme or heating system. Physical-system validation remains outstanding.**
+Simulated checks cover discovery, independent temperature confirmations, service targets, container layouts, color schemes, the editor and browser rendering. Layouts have been checked at 320, 390, 820 and 1400 px viewport widths and with a narrow card in a wide desktop window. Language checks cover selection, fallback, labels and preserved custom names. Widget and control-mode checks include read-only command blocking, admin detection, user changes, section rules and preserved editor configuration. **These checks are limited and do not establish compatibility with every HA version, browser, theme or heating system. Physical-system validation remains outstanding.**
 
 Report bugs and improvements through [GitHub Issues](https://github.com/kafast/ha-vaillant-card/issues). Include HA, integration and card versions, plus reproduction steps. Remove private IDs, serial numbers, credentials and personal information from logs and screenshots first.
 

@@ -218,3 +218,73 @@ test('energy diagnostics distinguish unmapped, disabled, unavailable and unsuppo
   states[f.ids.electric_heating]={state:'1200',attributes:{unit_of_measurement:'W'}};
   assert.equal(c._energyValue('electric_heating'),null);assert.equal(c._availability('electric_heating'),'Unsupported energy unit');
 });
+
+function controlCard(config={},user){
+  const {Card}=environment(),c=new Card(),calls=[],events=[];
+  c.setConfig({auto_discover:false,entities:{climate:'climate.example',water_heater:'water_heater.example',boost:'switch.example',efficiency:'sensor.example'},...config});
+  c.dispatchEvent=e=>{events.push(e);return true;};
+  c.hass={user,states:{
+    'climate.example':{state:'auto',attributes:{supported_features:1,temperature:22,current_temperature:20,hvac_modes:['auto','heat_cool','off']}},
+    'water_heater.example':{state:'Manual',attributes:{supported_features:3,temperature:52,current_temperature:50,operation_mode:'Manual',operation_list:['Manual','Off']}},
+    'switch.example':{state:'off',attributes:{}},'sensor.example':{state:'3.9',attributes:{}}
+  },callService:async(...args)=>calls.push(args)};
+  return {c,calls,events};
+}
+
+test('read-only mode removes controls and blocks services and native more-info dialogs',async()=>{
+  const {c,calls,events}=controlCard({control_mode:'read_only'},{is_admin:true});
+  assert.equal(c._canTemp(false),false);assert.equal(c._canTemp(true),false);
+  assert.doesNotMatch(c._home(),/data-step=|data-toggle=|data-mode=|data-more=/);
+  assert.match(c._home(),/target-reading/);assert.match(c._home(),/22\.0/);
+  assert.equal(await c._call('climate','set_temperature',{temperature:24}),false);
+  assert.equal(await c._call('boost','turn_on'),false);c._more('climate');
+  assert.equal(calls.length,0);assert.equal(events.length,0);
+});
+
+test('admin mode fails closed for missing or non-admin users and updates when the user changes',async()=>{
+  for(const user of [undefined,{is_admin:false},{is_admin:'true'}]){
+    const {c,calls}=controlCard({control_mode:'admin'},user);
+    assert.equal(c._canTemp(false),false);assert.equal(await c._call('boost','turn_on'),false);assert.equal(calls.length,0);
+  }
+  const {c,calls}=controlCard({control_mode:'admin'},{id:'example-admin',is_admin:true});
+  assert.equal(c._canTemp(false),true);assert.equal(await c._call('boost','turn_on'),true);assert.equal(calls.length,1);
+  c.hass={...c.hass,user:{id:'example-viewer',is_admin:false}};
+  assert.doesNotMatch(c.shadowRoot.innerHTML,/data-step=|data-toggle=|data-mode=|data-more=/);
+  assert.equal(await c._call('climate','set_temperature',{temperature:23}),false);assert.equal(calls.length,1);
+});
+
+test('section policies restrict independently and cannot relax the global policy',async()=>{
+  const {c,calls}=controlCard({control_modes:{heating:'read_only',hot_water:'admin',quick_actions:'full',settings:'read_only'}},{is_admin:false});
+  assert.equal(c._canTemp(false),false);assert.equal(c._canTemp(true),false);
+  assert.equal(await c._call('boost','turn_on'),true);assert.equal(calls.length,1);
+  c.hass={...c.hass,user:{is_admin:true}};
+  assert.equal(c._canTemp(false),false);assert.equal(c._canTemp(true),true);assert.equal(c._canInspect('water_heater'),false);
+  assert.equal(await c._call('water_heater','set_temperature',{temperature:51}),true);assert.equal(calls.length,2);
+  const blocked=controlCard({control_mode:'read_only',control_modes:{heating:'full'}},{is_admin:true});assert.equal(blocked.c._canTemp(false),false);
+});
+
+test('widgets render only their selected view with no dashboard navigation',()=>{
+  const expected={overview:'control-grid',heating:'data-control="climate"',hot_water:'data-control="water_heater"',quick_actions:'quick-body',energy:'energy-summary',efficiency:'3.90',system:'status-grid',system_data:'overview-stats'};
+  for(const [view,part] of Object.entries(expected)){
+    const {c}=controlCard({view,control_mode:'full'});assert.ok(c.shadowRoot.innerHTML.includes(part),view);
+    assert.doesNotMatch(c.shadowRoot.innerHTML,/<nav class="footer"/);
+    if(view==='heating')assert.doesNotMatch(c.shadowRoot.innerHTML,/data-control="water_heater"/);
+    if(view==='hot_water')assert.doesNotMatch(c.shadowRoot.innerHTML,/data-control="climate"/);
+  }
+  const hidden=controlCard({view:'efficiency',show_header:false});assert.doesNotMatch(hidden.c.shadowRoot.innerHTML,/<header class="top"/);
+});
+
+test('widget and permission options reject invalid configuration',()=>{
+  for(const config of [{view:'invalid'},{control_mode:'invalid'},{show_header:'false'},{control_modes:null},{control_modes:[]},{control_modes:{unknown:'admin'}},{control_modes:{heating:true}}])assert.throws(()=>controlCard(config));
+});
+
+test('editor widget and nested permissions preserve entity mappings without mutating input',()=>{
+  const {Editor}=environment(),e=new Editor(),original={type:'custom:vaillant-app-card',entities:{room:'sensor.example'},control_modes:{settings:'admin'}};let event;
+  e.setConfig(original);e.dispatchEvent=value=>{event=value;return true;};
+  e._change({target:{dataset:{key:'view'},value:'heating'}});assert.equal(event.detail.config.view,'heating');
+  e._change({target:{dataset:{key:'control_mode'},value:'admin'}});assert.equal(event.detail.config.control_mode,'admin');
+  e._change({target:{dataset:{key:'control_modes.heating'},value:'read_only'}});
+  assert.equal(event.detail.config.control_modes.heating,'read_only');assert.equal(original.control_modes.heating,undefined);
+  assert.equal(event.detail.config.control_modes.settings,'admin');assert.equal(event.detail.config.entities.room,'sensor.example');
+  e._change({target:{dataset:{key:'control_modes.heating'},value:''}});assert.equal(event.detail.config.control_modes.heating,undefined);
+});

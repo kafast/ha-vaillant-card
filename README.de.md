@@ -118,7 +118,7 @@ HACS verwaltet die JavaScript-Ressource normalerweise selbst. Fehlt sie unter **
 
    | Feld | Wert |
    | --- | --- |
-   | URL | `/local/vaillant-app-card.js?v=1.4.1` |
+   | URL | `/local/vaillant-app-card.js?v=1.4.0` |
    | Ressourcentyp | JavaScript-Modul |
 
 4. Das Frontend neu laden.
@@ -133,7 +133,7 @@ In die vorhandene Ressourcenliste eintragen:
 ```yaml
 lovelace:
   resources:
-    - url: /local/vaillant-app-card.js?v=1.4.1
+    - url: /local/vaillant-app-card.js?v=1.4.0
       type: module
 ```
 
@@ -246,6 +246,10 @@ Beschriftung und Farben lassen sich im visuellen Karteneditor einstellen. Für d
 | `type` | String | erforderlich | `custom:vaillant-app-card` |
 | `title` | String | sprachabhängig | Überschrift der Karte; eigene Texte bleiben unverändert |
 | `zone_name` | String | sprachabhängig | Anzeigename der Heizungsansicht; eigene Texte bleiben unverändert |
+| `view` | String | `dashboard` | Vollständige Karte oder einzelnes Widget; siehe unten |
+| `control_mode` | String | `full` | `full`, `admin` oder `read_only` |
+| `control_modes` | Objekt | `{}` | Zusätzliche Regeln für `heating`, `hot_water`, `quick_actions`, `settings` |
+| `show_header` | Boolean | `true` | Kartenüberschrift anzeigen |
 | `language` | String | `auto` | HA-Sprache übernehmen; alternativ `de` oder `en`. Andere HA-Sprachen verwenden Englisch. |
 | `color_scheme` | String | `home_assistant` | `vaillant`, `home_assistant`, `glass`, `graphite` oder `ocean` |
 | `accent_color` | String | aus Farbstil/Theme | Optionale Hex-Farbe für allgemeine Akzente |
@@ -258,6 +262,92 @@ Beschriftung und Farben lassen sich im visuellen Karteneditor einstellen. Für d
 | `water` | Ganzzahl | automatisch/Auswahl | Technischer Index des Warmwasserspeichers |
 | `energy_device_id` | String | automatisch/Auswahl | HA-Geräte-ID des Energiegeräts |
 | `entities` | Objekt | `{}` | Einzelne Entitätszuordnungen überschreiben |
+
+## Einzelne Widgets und Bedienrechte
+
+![Widgets](docs/widgets.jpg)
+
+*Widgets mit erfundenen Beispieldaten: Heizung mit Bedienung, Warmwasser nur zur Anzeige und Schnellaktionen nur für Administratoren (Ansicht eines normalen Benutzers).*
+
+Die vollständige Karte bleibt der Standard. Mit `view` lassen sich ihre Bereiche als einzelne Dashboard-Karten platzieren. Entitäten werden weiterhin automatisch erkannt; mehrere Widgets teilen sich die Registrierungsabfrage und erzeugen keine zusätzlichen Vaillant-Cloud-Abfragen.
+
+| `view` | Inhalt |
+| --- | --- |
+| `dashboard` | Vollständige Karte mit Navigation; Standard |
+| `overview` | Übersicht ohne Reiternavigation |
+| `heating` | Heizungsanzeige mit optionaler Temperatur- und Betriebsartsteuerung |
+| `hot_water` | Warmwasseranzeige mit optionaler Temperatur- und Betriebsartsteuerung |
+| `quick_actions` | Warmwasser-Boost, Stoßlüften und Abwesenheit |
+| `energy` | Energieübersicht mit Diagnose fehlender Werte |
+| `efficiency` | Einzelne Effizienzanzeige aus der Integration |
+| `system` | Vollständige Anlagen- und Wartungsansicht |
+| `system_data` | Kompakte Anlagendaten: Vorlauf, Druck, Außentemperatur, Effizienz |
+
+Beispiel: Heizungs-Widget, das nur Administratoren bedienen können:
+
+```yaml
+type: custom:vaillant-app-card
+view: heating
+control_mode: admin
+```
+
+Beispiel: Warmwasser ausschließlich anzeigen, ohne Plus/Minus oder Betriebsartauswahl:
+
+```yaml
+type: custom:vaillant-app-card
+view: hot_water
+control_mode: read_only
+```
+
+Beispiel: einzelne Effizienzanzeige:
+
+```yaml
+type: custom:vaillant-app-card
+view: efficiency
+control_mode: read_only
+```
+
+Optional entfernt `show_header: false` die Kartenüberschrift. Eigene `title`-Beschriftungen, Sprache, Farbstile und manuelle Zuordnungen funktionieren auch bei Widgets. Widget-Auswahl, allgemeiner Bedienmodus und Bereichsregeln sind im visuellen Editor verfügbar.
+
+### Anzeigen oder bedienen
+
+| `control_mode` | Verhalten |
+| --- | --- |
+| `full` | Anzeigen und bedienen, soweit Entität und Integration dies unterstützen; Standard |
+| `admin` | Nur angemeldete HA-Administratoren erhalten Bedienelemente; alle anderen sehen Werte |
+| `read_only` | Reine Anzeige für alle, einschließlich Administratoren |
+
+Im Anzeigemodus werden die Bedienelemente entfernt. Die Karte sendet keine Steuerbefehle und öffnet keine nativen Entitätsdialoge, über die Einstellungen geändert werden könnten. Navigation und lokale Auswahl einer Anlage bleiben möglich. Fehlende Benutzerinformationen werden bei `admin` als fehlende Admin-Berechtigung behandelt.
+
+Die Moduswahl gilt für die ganze Karte. Einzelne Bereiche können zusätzlich eingeschränkt werden:
+
+```yaml
+type: custom:vaillant-app-card
+control_mode: full
+control_modes:
+  heating: full
+  hot_water: admin
+  quick_actions: admin
+  settings: admin
+```
+
+- `heating`: Heizungs-Solltemperatur und Betriebsart.
+- `hot_water`: Warmwasser-Solltemperatur und Betriebsart.
+- `quick_actions`: Warmwasser-Boost, Stoßlüften und Abwesenheit, auch in Detailansichten.
+- `settings`: Öffnen nativer Entitätsdialoge für weitere Einstellungen und Messwerte.
+
+Bereichsregeln können den allgemeinen Modus nur weiter einschränken: `control_mode: read_only` bleibt auch mit `heating: full` eine reine Anzeige. Ein HA-Benutzerwechsel aktualisiert die Darstellung.
+
+> [!IMPORTANT]
+> **Das ist eine Bedienbeschränkung innerhalb der Karte, keine serverseitige Zugriffskontrolle.** Andere Dashboards, HA-Dialoge oder direkte Serviceaufrufe werden dadurch nicht gesperrt. Wer die Kartenkonfiguration bearbeiten kann, kann diese Regeln ändern. Für echte Berechtigungen ist die Home-Assistant-Authentifizierung und -Autorisierung zuständig. Auch zwei getrennte Anzeige-/Bedien-Dashboards allein schaffen keine serverseitige Sperre.
+
+### Warum Bedienung oder Energie fehlen können
+
+Steuerung ist grundsätzlich vorgesehen. Ist der Online-Sensor `off`, sperrt die Karte Befehle und zeigt den Grund an. Nicht verfügbare Steuerentitäten, fehlende Temperaturfunktionen oder erreichte Sollwertgrenzen können einzelne Bedienelemente ebenfalls sperren. Den Rohzustand des Online-Sensors und die Steuerung im normalen HA-Entitätsdialog vergleichen, bevor die Ursache einer bestimmten Komponente zugeordnet wird.
+
+Die Karte zeigt die von der Integration gelieferten Energiesensoren an. Stehen sie bereits in HA auf `unavailable`, kann die Karte keine Energie daraus berechnen. Ein numerischer Wert von 0 wird als 0 angezeigt; daraus allein lässt sich nicht erkennen, ob Vaillant noch keine aktuellen Daten geliefert hat. Der Effizienzwert kann unabhängig davon vorhanden sein. Er ist der gemeldete Integrationswert, keine von der Karte selbst ermittelte momentane COP-Messung.
+
+Fehlende oder stehengebliebene Energiewerte trotz funktionierender App sind im Integrationsprojekt [gemeldet](https://github.com/signalkraft/mypyllant-component/discussions/374). Die [Versionshinweise](https://github.com/signalkraft/mypyllant-component/releases) dokumentieren Verbesserungen am Energieimport in 0.9.17 und Statistik-Korrekturen in 0.9.18. Die eigene Integrationsversion und Protokollfehler prüfen; eine ältere Meldung beweist nicht dieselbe Ursache an der eigenen Anlage.
 
 ### Sprache
 
@@ -367,8 +457,6 @@ Ein erfolgreich gesendeter Befehl bestätigt noch nicht die Änderung an der Anl
 
 **Manuell:** Die JavaScript-Datei ersetzen und den Versionsparameter der Ressourcen-URL anpassen, damit der Browser die neue Datei lädt.
 
-**Neu in 1.4.1:** Energiezuordnung auch ohne HA-Gerätepräfix, Heizkreiszuordnung aus dem ursprünglichen Gerätenamen sowie sichtbare Offline-Sperrgründe und Diagnose für fehlende Energieentitäten.
-
 **Neu in 1.4.0:** Englische Quelltexte, deutsche und englische Oberfläche, Sprachauswahl im Editor und zweisprachige Dokumentation. Hinweise zur KI-Erstellung und zu Testgrenzen sind oben hervorgehoben.
 
 **Neu in 1.3.1:** Home Assistant ist der Standardfarbstil. Das gilt auch im visuellen Editor. Für die bisherige Farbgebung ausdrücklich `color_scheme: vaillant` setzen.
@@ -387,7 +475,6 @@ Ein erfolgreich gesendeter Befehl bestätigt noch nicht die Änderung an der Anl
 | Keine Anlage gefunden | myVAILLANT-Integration eingerichtet und geladen? Plattform `mypyllant`? Bei mehreren Anlagen die Auswahl in der Karte beachten. |
 | Automatische Zuordnung nicht möglich | **Entitäten neu suchen** verwenden. Kann die Sitzung die Registrierung nicht lesen, lokale Zuordnungen unter `entities` angeben. |
 | Werte fehlen oder stehen auf „—“ | Unter **Einstellungen → Geräte & Dienste → Entitäten** nach myVAILLANT filtern, deaktivierte Entitäten einblenden und benötigte aktivieren. |
-| Online-Sensor meldet offline | Bei `off` sperrt die Karte Steuerbefehle. Den Sensor öffnen und den Rohzustand prüfen; andere Messwerte können trotzdem vorhanden sein. Integration prüfen und Steuerung über den normalen HA-Entitätsdialog vergleichen. |
 | Plus/Minus ausgegraut | Steuerentität aktiv und verfügbar? Unterstützt sie die Temperatursteuerung? Ist bereits der minimale/maximale Sollwert erreicht? Meldet die Anlage sich offline? |
 | Alte Oberfläche nach einem Update | In HACS erneut herunterladen, Frontend neu laden und Browsercache prüfen. Doppelte Ressourcen entfernen. |
 | Energieanzeige fehlt oder ist veraltet | Energieentitäten und deren Zustand direkt in HA prüfen. Mehrere Energiegeräte gegebenenfalls auswählen. Zeitraum und Aktualisierung hängen von der Integration ab. |
@@ -411,7 +498,7 @@ node --test tests/discovery.test.cjs
 node --check vaillant-app-card.js
 ```
 
-Automatische Zuordnung, getrennte Sollwertbestätigungen, Serviceziele, Container-Layouts, Farbstile, visueller Editor und Browserdarstellung wurden mit simulierten Daten geprüft. Die Ansichten wurden bei 320, 390, 820 und 1400 px Fensterbreite sowie als schmale Karte in einem breiten Desktopfenster geprüft. Die Sprachprüfungen umfassen Auswahl, Fallback, Beschriftungen und den Erhalt eigener Namen. Diese begrenzten Prüfungen belegen keine Kompatibilität mit jeder HA-Version, jedem Browser, Theme oder Anlagentyp. Eine Prüfung an einer echten Anlage steht noch aus.
+Automatische Zuordnung, getrennte Sollwertbestätigungen, Serviceziele, Container-Layouts, Farbstile, visueller Editor und Browserdarstellung wurden mit simulierten Daten geprüft. Die Ansichten wurden bei 320, 390, 820 und 1400 px Fensterbreite sowie als schmale Karte in einem breiten Desktopfenster geprüft. Die Sprachprüfungen umfassen Auswahl, Fallback, Beschriftungen und den Erhalt eigener Namen. Widget- und Bedienmodus-Prüfungen decken gesperrte Befehle im Anzeigemodus, Admin-Erkennung, Benutzerwechsel, Bereichsregeln und Konfigurationserhalt im Editor ab. Diese begrenzten Prüfungen belegen keine Kompatibilität mit jeder HA-Version, jedem Browser, Theme oder Anlagentyp. Eine Prüfung an einer echten Anlage steht noch aus.
 
 Fehler und Verbesserungsvorschläge können über [GitHub Issues](https://github.com/kafast/ha-vaillant-card/issues) gemeldet werden. Hilfreich sind HA-Version, Version der myVAILLANT-Integration, Kartenversion sowie die Schritte zur Reproduktion. Private IDs, Seriennummern, Zugangsdaten und persönliche Screenshots vorher entfernen bzw. unkenntlich machen.
 
