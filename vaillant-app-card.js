@@ -1,4 +1,4 @@
-/* Vaillant App Card v1.5.0 — independent custom card, no external dependencies.
+/* Vaillant App Card v1.6.0 — independent custom card, no external dependencies.
  * AI-generated and AI-assisted experimental code. Tests use simulated data;
  * operation on a physical heating system has not been validated. See README. */
 (() => {
@@ -6,10 +6,18 @@
   const REGISTRY_CACHE = new WeakMap();
   const COLOR_SCHEMES = {vaillant:'Vaillant',home_assistant:'Home Assistant',glass:'Glass',graphite:'Graphite',ocean:'Ocean'};
   // German translations; all source messages and identifiers use English.
-  const WIDGET_VIEWS = {dashboard:'Full dashboard',overview:'Overview',heating:'Heating',hot_water:'Hot water',quick_actions:'Quick actions',energy:'Energy',efficiency:'Energy efficiency',system:'System',system_data:'System data'};
+  const WIDGET_VIEWS = {dashboard:'Full dashboard',overview:'Overview',heating:'Heating',hot_water:'Hot water',quick_actions:'Quick actions',energy:'Energy',efficiency:'Energy efficiency',power:'Current electrical power',system:'System',system_data:'System data'};
   const CONTROL_MODES = {full:'View and control',admin:'Administrators only',read_only:'View only'};
   const CONTROL_GROUPS = ['heating','hot_water','quick_actions','settings'];
   const DE = {
+  "Current electrical power": "Momentane elektrische Leistung",
+  "Power sensor · optional": "Leistungssensor · optional",
+  "Use a sensor in W or kW. Leave empty to hide the optional power display.": "Einen Sensor in W oder kW auswählen. Ohne Sensor bleibt die optionale Leistungsanzeige ausgeblendet.",
+  "Enter a sensor entity ID such as sensor.example_heat_pump_power.": "Eine Sensor-ID wie sensor.example_heat_pump_power eingeben.",
+  "Configure a power sensor in the card editor.": "Einen Leistungssensor im Karteneditor festlegen.",
+  "Unsupported power unit (use W or kW).": "Nicht unterstützte Leistungseinheit (W oder kW verwenden).",
+  "Reported by the selected sensor; refresh depends on its integration.": "Wert des gewählten Sensors; Aktualisierung abhängig von dessen Integration.",
+
   "Full dashboard": "Vollständiges Dashboard",
   "View and control": "Anzeigen und bedienen",
   "Administrators only": "Nur Administratoren",
@@ -227,7 +235,7 @@
     'operating_state','circuit_state','boost','ventilation','away','heating_curve','veto_duration',
     'efficiency','firmware','firmware_update','heating_calendar','water_calendar','circulation_calendar',
     'electric_heating','electric_water','environment_heating','environment_water','heat_heating',
-    'heat_water','hydraulic_electric','hydraulic_heat'];
+    'heat_water','hydraulic_electric','hydraulic_heat','power'];
   const emptyIds = () => Object.fromEntries(ENTITY_KEYS.map(k => [k, null]));
   const uid = e => String(e?.unique_id || '').replace(/^mypyllant /, 'mypyllant_');
   const domain = e => String(e?.entity_id || '').split('.')[0];
@@ -494,6 +502,7 @@ ha-card:not([data-view="dashboard"]) .top{padding:18px 18px 14px}ha-card:not([da
       for(const [key,id] of Object.entries(config.entities || {})) {
         if(!ENTITY_KEYS.includes(key) || (id!==null && (typeof id!=='string' || !/^[a-z_]+\.[a-z0-9_]+$/.test(id)))) throw new Error('Invalid entity mapping: '+key);
       }
+      if(config.entities?.power && !config.entities.power.startsWith('sensor.'))throw new Error('power must be a sensor entity.');
       for(const key of ['zone','circuit','water']) if(config[key]!==undefined && !/^\d+$/.test(String(config[key]))) throw new Error(key+' must be a non-negative index.');
       if(config.color_scheme!==undefined && !Object.prototype.hasOwnProperty.call(COLOR_SCHEMES,config.color_scheme)) throw new Error('Unknown color scheme: '+String(config.color_scheme));
       for(const key of ['accent_color','heating_color']) if(config[key]!==undefined && !isHexColor(config[key])) throw new Error(key+' must be a hex color, for example #03a9f4.');
@@ -526,7 +535,7 @@ ha-card:not([data-view="dashboard"]) .top{padding:18px 18px 14px}ha-card:not([da
     _language(){return getLanguage(this._config,this._hass);}
     _t(message){return translate(message,this._language());}
     _format(value,digits=1){return formatNumber(value,digits,this._language());}
-    getCardSize(){return ['heating','hot_water','quick_actions','system_data','efficiency'].includes(this._config?.view)?4:this._page==='home'?10:13;}
+    getCardSize(){return ['heating','hot_water','quick_actions','system_data','efficiency','power'].includes(this._config?.view)?4:this._page==='home'?10:13;}
     getGridOptions(){return {columns:this._config?.view==='dashboard'?'full':12,min_columns:6,rows:'auto'};}
     _permits(mode){return mode==='full'||(mode==='admin'&&this._hass?.user?.is_admin===true);}
     _mayControl(group){return this._permits(this._config?.control_mode || 'full')&&this._permits(this._config?.control_modes?.[group] || 'full');}
@@ -545,6 +554,7 @@ ha-card:not([data-view="dashboard"]) .top{padding:18px 18px 14px}ha-card:not([da
         case 'hot_water':return this._offlineNotice()+this._controlPanel(true,true);
         case 'quick_actions':return this._offlineNotice()+this._quickActions();
         case 'energy':return this._energy();
+        case 'power':return this._powerPanel();
         case 'efficiency':return `<section class="energy-total secondary"><small>${icon('leaf')}Energy efficiency</small><strong>${this._format(this._num('efficiency'),2)}</strong><p>Reported value for heating and hot water</p></section>`;
         case 'system':return this._status();
         case 'system_data':return this._systemData();
@@ -556,7 +566,7 @@ ha-card:not([data-view="dashboard"]) .top{padding:18px 18px 14px}ha-card:not([da
     disconnectedCallback(){this._resetPending();}
     _resetPending() { for(const timer of Object.values(this._pendingTimers || {})) clearTimeout(timer); this._pendingTemps={}; this._pendingTimers={}; }
     async _discover(force=false) {
-      if (!this._config || !this._hass || this._config.auto_discover===false) return;
+      if (!this._config || !this._hass || this._config.auto_discover===false || this._config.view==='power') return;
       const token=++this._discoveryToken;
       this._discoveryBusy=true; this._discoveryError=null; this._render();
       try {
@@ -579,7 +589,7 @@ ha-card:not([data-view="dashboard"]) .top{padding:18px 18px 14px}ha-card:not([da
       this._signature=null;
     }
     _discoveryPanel() {
-      if(this._config.auto_discover===false)return '';
+      if(this._config.auto_discover===false||this._config.view==='power')return '';
       const titles={system:'System',zone:'Heating zone',water:'Hot-water tank',circuit:'Heating circuit',energy_device:'Energy device'};
       const pinned={system:'system_id',zone:'zone',water:'water',circuit:'circuit',energy_device:'energy_device_id'};
       const selectors=Object.entries(this._choices||{}).filter(([key,items])=>items.length>1 && this._config[pinned[key]]===undefined).map(([key,items])=>
@@ -624,6 +634,25 @@ ha-card:not([data-view="dashboard"]) .top{padding:18px 18px 14px}ha-card:not([da
       const disabled=!this._ok(key)||this._busy||this._offline()||(water&&!(Number(this._attr(key,'supported_features'))&2));
       return `<label class="row">${icon('settings')}<span>Operating mode</span><select data-mode="${key}" aria-label="Operating mode ${water?this._t('Hot water'):this._t('Heating')}" ${disabled?'disabled':''}>${modes.includes(active)?'':`<option selected disabled value="">${esc(modeName(active))}</option>`}${modes.map(m=>`<option value="${esc(m)}" ${m===active?'selected':''}>${esc(modeName(m))}</option>`).join('')}</select></label>`;
     }
+    _powerValue(){
+      const value=this._num('power'),unit=this._attr('power','unit_of_measurement');
+      return value===null?null:unit==='W'?value:unit==='kW'?value*1000:null;
+    }
+    _powerReading(){
+      const watts=this._powerValue();
+      return watts===null?{value:'—',unit:''}:Math.abs(watts)>=1000?{value:this._format(watts/1000,2),unit:'kW'}:{value:this._format(watts,1),unit:'W'};
+    }
+    _powerReason(){
+      if(!this._ids.power)return 'Configure a power sensor in the card editor.';
+      if(!this._ok('power'))return this._availability('power');
+      if(this._num('power')===null)return 'No numeric reading';
+      return 'Unsupported power unit (use W or kW).';
+    }
+    _powerPanel(){
+      if(!this._ids.power&&this._config.view!=='power')return '';
+      const reading=this._powerReading();
+      return `<section class="energy-total secondary power-panel"><small>${icon('energy')}Current electrical power</small><strong>${reading.value}<span>${reading.unit}</span></strong><p>${this._powerValue()===null?esc(this._powerReason()):'Reported by the selected sensor; refresh depends on its integration.'}</p></section>`;
+    }
     _energyValue(key){const n=this._num(key),unit=this._attr(key,'unit_of_measurement');return n===null?null:unit==='Wh'?n/1000:unit==='kWh'?n:unit==='MWh'?n*1000:null;}
     _availability(key){
       if(!this._ids[key])return 'Not assigned';
@@ -645,10 +674,10 @@ ha-card:not([data-view="dashboard"]) .top{padding:18px 18px 14px}ha-card:not([da
     _circuitLabel(){return this._selected.circuit===undefined?'Heating circuit':`Heating circuit ${Number(this._selected.circuit)+1}`;}
     _stat(label,key,ic,digits=1) {
       const interactive=this._canInspect(key),tag=interactive?'button':'div';
-      return `<${tag} class="stat" ${interactive?`data-more="${esc(key)}"`:''}><small>${icon(ic)}${esc(label)}</small><strong>${this._formatSensor(key,digits)}</strong></${tag}>`;
+      return `<${tag} class="stat" ${interactive?`data-more="${esc(key)}"`:''}><small>${icon(ic)}${esc(label)}</small><strong>${key==='power'?`${this._powerReading().value} ${this._powerReading().unit}`:this._formatSensor(key,digits)}</strong></${tag}>`;
     }
     _quickActions(){return `<section class="surface"><div class="section">Quick actions</div>${this._accessLabel('quick_actions')?`<p class="hint">${this._accessLabel('quick_actions')}</p>`:''}<div class="quick-body">${this._toggle('Hot-water boost','boost','water')}${this._toggle('Ventilation boost','ventilation','wind')}${this._toggle('Away','away','home')}</div></section>`;}
-    _systemData(){return `<section class="surface"><div class="section">System data</div><div class="overview-stats">${this._stat('Flow temperature','flow','heat')}${this._stat('Water pressure','pressure','pressure')}${this._stat('Outside','outdoor','temp')}${this._stat('Efficiency','efficiency','leaf',2)}</div>${this._config.view==='dashboard'?`<button class="aside-link" data-page="status">All system data${icon('arrow')}</button>`:''}</section>`;}
+    _systemData(){return `<section class="surface"><div class="section">System data</div><div class="overview-stats">${this._ids.power?this._stat('Current electrical power','power','energy'):this._stat('Flow temperature','flow','heat')}${this._stat('Water pressure','pressure','pressure')}${this._ids.power?this._stat('Flow temperature','flow','heat'):''}${this._stat('Outside','outdoor','temp')}${this._stat('Efficiency','efficiency','leaf',2)}</div>${this._config.view==='dashboard'?`<button class="aside-link" data-page="status">All system data${icon('arrow')}</button>`:''}</section>`;}
     _home(){return `${this._offlineNotice()}<div class="overview">
       <div class="control-grid">${this._controlPanel(false)}${this._controlPanel(true)}</div>
       <aside class="overview-aside">${this._quickActions()}${this._systemData()}</aside></div>`;}
@@ -678,7 +707,7 @@ ha-card:not([data-view="dashboard"]) .top{padding:18px 18px 14px}ha-card:not([da
     _energyKeys(){return ['electric_heating','electric_water','environment_heating','environment_water','heat_heating','heat_water','hydraulic_electric','hydraulic_heat'];}
     _energy(){const a=this._energyValue('electric_heating'),b=this._energyValue('electric_water');return `
       <div class="page-heading"><h2>Energy overview</h2><small>Sensor readings</small></div>${this._energyKeys().some(k=>this._energyValue(k)===null)?this._config.view==='dashboard'?'<button class="row" data-page="status">Some energy readings are missing. Open System for assignment and availability details.</button>':this._energyDiagnostics():''}
-      <div class="energy-summary"><section class="energy-total"><small>${icon('energy')}Electrical energy</small><strong>${this._format(a===null||b===null?null:a+b,2)}<span>kWh</span></strong><p>Heating and hot water · Energy device</p></section><section class="energy-total secondary"><small>${icon('leaf')}Energy efficiency</small><strong>${this._format(this._num('efficiency'),2)}</strong><p>Reported value for heating and hot water</p></section></div>
+      <div class="energy-summary">${this._powerPanel()}<section class="energy-total"><small>${icon('energy')}Electrical energy</small><strong>${this._format(a===null||b===null?null:a+b,2)}<span>kWh</span></strong><p>Heating and hot water · Energy device</p></section><section class="energy-total secondary"><small>${icon('leaf')}Energy efficiency</small><strong>${this._format(this._num('efficiency'),2)}</strong><p>Reported value for heating and hot water</p></section></div>
       <div class="energy-grid">
         <section class="surface"><div class="section">Electrical energy</div>${this._energyRow('Heating','electric_heating','heat')}${this._energyRow('Hot water','electric_water','water')}</section>
         <section class="surface"><div class="section">Environmental yield</div>${this._energyRow('Heating','environment_heating','leaf')}${this._energyRow('Hot water','environment_water','leaf')}</section>
@@ -692,7 +721,7 @@ ha-card:not([data-view="dashboard"]) .top{padding:18px 18px 14px}ha-card:not([da
         <section class="surface"><div class="section">System data</div>${this._metric('Water pressure','pressure','pressure')}${this._metric('Flow temperature '+this._circuitLabel(),'flow','heat')}${this._metric('Target flow temperature','flow_target','temp')}${this._metric('System flow temperature','system_flow','temp')}</section>
         <section class="surface"><div class="section">Temperatures</div>${this._metric('Room temperature','room','home')}${this._metric('Hot-water tank','tank','water')}${this._metric('Outdoor temperature','outdoor','temp')}</section>
         <section class="surface"><div class="section">Maintenance</div>${this._row('Fault details','trouble','info',this._state('trouble')==='on'?'Fault':this._state('trouble')==='off'?'None reported':'Unavailable')}${this._row('Firmware','firmware','info')}${this._row('Firmware update','firmware_update','info',this._state('firmware_update')==='on'?'Available':this._state('firmware_update')==='off'?'None reported':'Unavailable')}</section>
-      </div>${this._energyDiagnostics()}${missing.length?`<div class="availability"><b>Missing or unavailable entities</b><br>${missing.map(k=>`<code>${esc(this._ids[k] || k+' (not assigned)')}</code>`).join('<br>')}<br>Enable them in entity settings if needed.</div>`:''}`;
+      </div>${this._ids.power?this._powerPanel():''}${this._energyDiagnostics()}${missing.length?`<div class="availability"><b>Missing or unavailable entities</b><br>${missing.map(k=>`<code>${esc(this._ids[k] || k+' (not assigned)')}</code>`).join('<br>')}<br>Enable them in entity settings if needed.</div>`:''}`;
     }
     _render(){
       if(!this._config||!this._hass)return;
@@ -735,9 +764,21 @@ ha-card:not([data-view="dashboard"]) .top{padding:18px 18px 14px}ha-card:not([da
   class VaillantAppCardEditor extends HTMLElement {
     constructor(){super();this.attachShadow({mode:'open'});this._config={};this.shadowRoot.addEventListener('change',event=>this._change(event));}
     setConfig(config){this._config={...config};this._error=null;this._render();}
-    set hass(hass){const previous=getLanguage(this._config,this._hass);this._hass=hass;if(previous!==getLanguage(this._config,hass))this._render();}
+    set hass(hass){
+      const previous=getLanguage(this._config,this._hass);
+      const choices=JSON.stringify(Object.entries(hass?.states || {}).filter(([id,state])=>id.startsWith('sensor.')&&['W','kW'].includes(state.attributes?.unit_of_measurement)).map(([id])=>id).sort());
+      const refresh=!this._hass||choices!==this._powerChoices;this._hass=hass;this._powerChoices=choices;
+      if(refresh||previous!==getLanguage(this._config,hass))this._render();
+    }
     _change(event){
       const key=event.target.dataset.key,value=event.target.value;
+      if(key==='entities.power'){
+        const entity=value.trim();
+        if(entity&&!/^sensor\.[a-z0-9_]+$/.test(entity)){this._error='Enter a sensor entity ID such as sensor.example_heat_pump_power.';this._render();return;}
+        const entities={...this._config.entities};if(entity)entities.power=entity;else delete entities.power;
+        this._config={...this._config,type:this._config.type || 'custom:vaillant-app-card',entities};this._error=null;
+        this.dispatchEvent(new CustomEvent('config-changed',{detail:{config:{...this._config,entities:{...entities}}},bubbles:true,composed:true}));this._render();return;
+      }
       if(key.startsWith('control_modes.')){
         const group=key.slice('control_modes.'.length);if(!CONTROL_GROUPS.includes(group)||(value&&!Object.prototype.hasOwnProperty.call(CONTROL_MODES,value)))return;
         const modes={...this._config.control_modes};if(value)modes[group]=value;else delete modes[group];
@@ -760,12 +801,14 @@ ha-card:not([data-view="dashboard"]) .top{padding:18px 18px 14px}ha-card:not([da
     }
     _render(){
       const field=(key,label,placeholder)=>`<label>${label}<input data-key="${key}" value="${esc(this._config[key] || '')}" placeholder="${placeholder}" spellcheck="false"></label>`;
+      const powerSensors=Object.keys(this._hass?.states || {}).filter(id=>id.startsWith('sensor.')&&['W','kW'].includes(this._hass.states[id].attributes?.unit_of_measurement));
       const select=(key,label,options,selected)=>`<label>${label}<select data-key="${key}">${Object.entries(options).map(([value,text])=>`<option value="${value}" ${value===selected?'selected':''}>${text}</option>`).join('')}</select></label>`;
       this.shadowRoot.innerHTML=`<style>
         :host{display:block;color:var(--primary-text-color,#212121);font-family:inherit}*{box-sizing:border-box}.fields{display:grid;gap:16px;padding:8px 0}label{display:grid;gap:7px;font-size:13px}input,select{font:inherit;color:inherit;min-height:44px;border:1px solid var(--divider-color,#ccc);border-radius:8px;background:var(--card-background-color,#fff);padding:10px 12px;width:100%}input:focus-visible,select:focus-visible{outline:2px solid var(--primary-color,#03a9f4);outline-offset:2px}.pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}p{font-size:12px;line-height:1.6;margin:0;color:var(--secondary-text-color,#666)}.error{color:var(--error-color,#b3261e)}@media(max-width:500px){.pair{grid-template-columns:1fr}}
         </style><div class="fields" lang="${getLanguage(this._config,this._hass)}">
         ${select('view','Widget',WIDGET_VIEWS,this._config.view || 'dashboard')}${select('control_mode','Controls',CONTROL_MODES,this._config.control_mode || 'full')}<details><summary>Section controls</summary><div class="pair">${CONTROL_GROUPS.map(group=>select('control_modes.'+group,({heating:'Heating',hot_water:'Hot water',quick_actions:'Quick actions',settings:'Settings'})[group],{'':'Use card setting',...CONTROL_MODES},this._config.control_modes?.[group] || '')).join('')}</div></details><p>Card controls only; Home Assistant permissions still apply.</p>
         <div class="pair">${field('title','Title','Heat pump')}${field('zone_name','Heating name','Heating')}</div>
+        <label>Power sensor · optional<input data-key="entities.power" value="${esc(this._config.entities?.power || '')}" placeholder="sensor.example_heat_pump_power" list="power-sensors" spellcheck="false"></label><datalist id="power-sensors">${powerSensors.map(id=>`<option value="${esc(id)}"></option>`).join('')}</datalist><p>Use a sensor in W or kW. Leave empty to hide the optional power display.</p>
         <label>Language<select data-key="language">${[['auto','Automatic (Home Assistant)'],['de','German'],['en','English']].map(([value,label])=>`<option value="${value}" ${value===(this._config.language || 'auto')?'selected':''}>${label}</option>`).join('')}</select></label>
         <label>Color scheme<select data-key="color_scheme">${Object.entries(COLOR_SCHEMES).map(([key,name])=>`<option value="${key}" ${key===(this._config.color_scheme || DEFAULT_COLOR_SCHEME)?'selected':''}>${name}</option>`).join('')}</select></label>
         <p>Home Assistant uses your active theme colors. Glass uses translucent surfaces; a dashboard background makes the effect more visible. Light/dark mode follows Home Assistant.</p>

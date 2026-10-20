@@ -236,6 +236,7 @@ The full dashboard remains the default. Use `view` to place individual areas as 
 | `quick_actions` | Hot-water boost, ventilation boost and away mode |
 | `energy` | Energy overview with missing-reading diagnostics |
 | `efficiency` | A single efficiency reading from the integration |
+| `power` | Optional current electrical power from a selected sensor |
 | `system` | Full system and maintenance view |
 | `system_data` | Compact flow temperature, pressure, outdoor temperature and efficiency |
 
@@ -264,6 +265,34 @@ control_mode: read_only
 ```
 
 Use `show_header: false` to hide the card heading. Custom titles, language, colors and entity overrides also work with widgets. The visual editor supports widget selection, the general control mode and section rules.
+
+### Optional current electrical power
+
+Choose **Power sensor · optional** in the visual editor, or assign a sensor in YAML:
+
+```yaml
+type: custom:vaillant-app-card
+entities:
+  power: sensor.example_heat_pump_power
+```
+
+The sensor may come from myVAILLANT, a separate electricity meter, MQTT or another HA integration. Existing W/kW sensors are suggested in the editor; a future entity ID can also be entered manually. Replace the example ID with your own sensor when it is available.
+
+Without `entities.power` (or with `null`), the optional display stays hidden. Once configured, it appears in the overview, energy and system views, and the system-data widget. The compact overview prioritizes power and water pressure; flow temperature remains in the full system view. Clear the editor field to hide it again without removing other entity assignments.
+
+The source unit must be **W** or **kW**. The card converts between them for display and preserves an actual zero. Missing, unavailable, nonnumeric or unsupported-unit values show “—”; they are not treated as zero. A sensor in A, Wh or kWh is not an instantaneous power sensor. No energy totals or COP values are calculated from this optional reading. Updates follow the sensor's own HA integration; this card does not poll it separately.
+
+Standalone display-only widget:
+
+```yaml
+type: custom:vaillant-app-card
+view: power
+control_mode: read_only
+entities:
+  power: sensor.example_heat_pump_power
+```
+
+The standalone power widget needs no myVAILLANT registry access. Until its sensor is available, it shows an availability notice. Other widgets and the full dashboard keep their usual discovery behavior.
 
 ### Viewing and controlling
 
@@ -355,6 +384,7 @@ Local assignments override discovery. `null` disables an assignment but does not
 | Environmental energy | `environment_heating`, `environment_water` |
 | Generated heat | `heat_heating`, `heat_water` |
 | Hydraulic station | `hydraulic_electric`, `hydraulic_heat` |
+| Current electrical power | `power` (optional; manually selected sensor) |
 | Efficiency and firmware | `efficiency`, `firmware`, `firmware_update` |
 
 Values are entity IDs from your own HA installation. Keep private assignments in local dashboard YAML, not public examples.

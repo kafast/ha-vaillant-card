@@ -280,6 +280,7 @@ Die vollständige Karte bleibt der Standard. Mit `view` lassen sich ihre Bereich
 | `quick_actions` | Warmwasser-Boost, Stoßlüften und Abwesenheit |
 | `energy` | Energieübersicht mit Diagnose fehlender Werte |
 | `efficiency` | Einzelne Effizienzanzeige aus der Integration |
+| `power` | Optionale Momentanleistung eines frei gewählten Sensors |
 | `system` | Vollständige Anlagen- und Wartungsansicht |
 | `system_data` | Kompakte Anlagendaten: Vorlauf, Druck, Außentemperatur, Effizienz |
 
@@ -308,6 +309,34 @@ control_mode: read_only
 ```
 
 Optional entfernt `show_header: false` die Kartenüberschrift. Eigene `title`-Beschriftungen, Sprache, Farbstile und manuelle Zuordnungen funktionieren auch bei Widgets. Widget-Auswahl, allgemeiner Bedienmodus und Bereichsregeln sind im visuellen Editor verfügbar.
+
+### Optionale momentane elektrische Leistung
+
+Im visuellen Editor **Leistungssensor · optional** auswählen oder den Sensor per YAML zuordnen:
+
+```yaml
+type: custom:vaillant-app-card
+entities:
+  power: sensor.example_heat_pump_power
+```
+
+Der Sensor kann aus myVAILLANT, einem separaten Stromzähler, MQTT oder einer anderen HA-Integration stammen. Vorhandene W-/kW-Sensoren werden im Editor vorgeschlagen; eine zukünftige Entitäts-ID kann auch manuell eingetragen werden. Die Beispiel-ID später durch den eigenen Sensor ersetzen.
+
+Ohne `entities.power` bzw. mit `null` bleibt die optionale Anzeige ausgeblendet. Mit konfiguriertem Sensor erscheint sie in Übersicht, Energie- und Anlagenansicht sowie im Anlagendaten-Widget. Die kompakte Übersicht priorisiert dann Leistung und Wasserdruck; die Vorlauftemperatur bleibt in der vollständigen Anlagenansicht erhalten. Zum Ausblenden das Sensorfeld leeren; andere Entitätszuordnungen bleiben bestehen.
+
+Die Einheit des Sensors muss **W** oder **kW** sein. Die Karte rechnet für die Darstellung um und erhält einen echten Nullwert. Fehlende, nicht verfügbare, nicht numerische oder mit falscher Einheit gelieferte Werte erscheinen als „—“, nicht als 0. Ein Sensor in A, Wh oder kWh ist kein Sensor für momentane Leistung. Aus dem optionalen Wert werden keine Energiesummen oder COP-Werte berechnet. Die Aktualisierung folgt der jeweiligen Sensorintegration; die Karte fragt den Sensor nicht zusätzlich ab.
+
+Einzelnes Widget nur zur Anzeige:
+
+```yaml
+type: custom:vaillant-app-card
+view: power
+control_mode: read_only
+entities:
+  power: sensor.example_heat_pump_power
+```
+
+Das einzelne Leistungs-Widget benötigt keinen Zugriff auf die myVAILLANT-Registrierung. Solange der Sensor noch nicht verfügbar ist, zeigt es einen entsprechenden Hinweis. Andere Widgets und die vollständige Karte verwenden weiterhin ihre übliche automatische Zuordnung.
 
 ### Anzeigen oder bedienen
 
@@ -407,6 +436,7 @@ Lokale Zuordnungen unter `entities` haben Vorrang vor der automatischen Erkennun
 | Umweltertrag | `environment_heating`, `environment_water` |
 | Erzeugte Wärme | `heat_heating`, `heat_water` |
 | Hydraulikstation | `hydraulic_electric`, `hydraulic_heat` |
+| Momentane elektrische Leistung | `power` (optional; manuell gewählter Sensor) |
 | Effizienz und Firmware | `efficiency`, `firmware`, `firmware_update` |
 
 Die Werte sind die jeweiligen Entitäts-IDs aus der eigenen HA-Installation. Private Zuordnungen gehören ins lokale Dashboard-YAML, nicht in öffentliche Beispiele.

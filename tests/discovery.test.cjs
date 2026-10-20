@@ -288,3 +288,47 @@ test('editor widget and nested permissions preserve entity mappings without muta
   assert.equal(event.detail.config.control_modes.settings,'admin');assert.equal(event.detail.config.entities.room,'sensor.example');
   e._change({target:{dataset:{key:'control_modes.heating'},value:''}});assert.equal(event.detail.config.control_modes.heating,undefined);
 });
+
+test('optional external power sensor survives discovery without affecting energy totals',()=>{
+  const {resolve}=environment(),f=fixture();
+  const resolved=resolve(f.registry,{entities:{power:'sensor.external_meter_power'}});
+  assert.equal(resolved.ids.power,'sensor.external_meter_power');
+  assert.equal(resolved.ids.electric_heating,f.ids.electric_heating);
+  const {c}=controlCard();assert.equal(c._powerPanel(),'');assert.doesNotMatch(c._energy(),/power-panel/);
+  assert.throws(()=>controlCard({entities:{power:'switch.example'}}));
+});
+
+test('power display converts W and kW, preserves zero, and rejects energy units and invalid readings',()=>{
+  const {c}=controlCard({entities:{power:'sensor.external_meter_power'}});
+  const check=(state,unit,watts,value,displayUnit)=>{
+    c.hass={...c.hass,states:{'sensor.external_meter_power':{state,attributes:{unit_of_measurement:unit}}}};
+    assert.equal(c._powerValue(),watts);assert.equal(c._powerReading().value,value);assert.equal(c._powerReading().unit,displayUnit);
+  };
+  check('2450','W',2450,'2.45','kW');check('2.45','kW',2450,'2.45','kW');
+  check('0','W',0,'0.0','W');check('42.5','W',42.5,'42.5','W');
+  check('unavailable','W',null,'—','');check('unknown','W',null,'—','');check('bad','W',null,'—','');
+  check('2450','Wh',null,'—','');assert.match(c._powerPanel(),/Unsupported power unit/);
+  c.hass={...c.hass,states:{}};assert.match(c._powerPanel(),/Unavailable/);
+});
+
+test('standalone power widget needs no Vaillant registry and updates on sensor changes',async()=>{
+  const {Card}=environment(),c=new Card();let reads=0;
+  c.setConfig({view:'power',control_mode:'read_only',entities:{power:'sensor.external_meter_power'}});
+  const hass={connection:{},states:{'sensor.external_meter_power':{state:'750',attributes:{unit_of_measurement:'W'}}},callWS:async()=>{reads++;throw Error('no registry access');}};
+  c.hass=hass;await c._discoveryPromise;assert.equal(reads,0);assert.equal(c._discoveryPanel(),'');
+  assert.match(c.shadowRoot.innerHTML,/750\.0/);assert.doesNotMatch(c.shadowRoot.innerHTML,/<nav |data-step=|data-toggle=/);
+  c.hass={...hass,states:{'sensor.external_meter_power':{state:'1250',attributes:{unit_of_measurement:'W'}}}};
+  assert.match(c.shadowRoot.innerHTML,/1\.25/);
+});
+
+test('power sensor editor preserves other mappings, allows future sensors and removes only power',()=>{
+  const {Editor}=environment(),e=new Editor(),original={entities:{room:'sensor.example_room'},control_mode:'admin'};let event;
+  e.setConfig(original);e.dispatchEvent=value=>{event=value;return true;};
+  e.hass={states:{'sensor.power_w':{attributes:{unit_of_measurement:'W'}},'sensor.energy':{attributes:{unit_of_measurement:'Wh'}}}};
+  assert.match(e.shadowRoot.innerHTML,/<option value="sensor.power_w"/);assert.doesNotMatch(e.shadowRoot.innerHTML,/<option value="sensor.energy"/);
+  e._change({target:{dataset:{key:'entities.power'},value:'sensor.future_meter_power'}});
+  assert.equal(event.detail.config.entities.power,'sensor.future_meter_power');assert.equal(original.entities.power,undefined);
+  assert.equal(event.detail.config.entities.room,'sensor.example_room');assert.equal(event.detail.config.control_mode,'admin');
+  const valid=event;e._change({target:{dataset:{key:'entities.power'},value:'switch.not_a_sensor'}});assert.equal(event,valid);assert.ok(e._error);
+  e._change({target:{dataset:{key:'entities.power'},value:''}});assert.equal(event.detail.config.entities.power,undefined);assert.equal(event.detail.config.entities.room,'sensor.example_room');
+});

@@ -11,7 +11,7 @@ type: custom:vaillant-app-card
 # accent_color: "#03a9f4"
 # heating_color: "#ff9800"
 # Widget: dashboard (default), overview, heating, hot_water, quick_actions,
-# energy, efficiency, system, system_data
+# energy, efficiency, power, system, system_data
 # view: heating
 # Control mode: full (default), admin, read_only
 # control_mode: admin
@@ -22,3 +22,7 @@ type: custom:vaillant-app-card
 #   settings: admin
 # UI restrictions only; Home Assistant authorization still applies.
 # show_header: false
+# Optional current electrical power (any HA sensor with unit W or kW):
+# entities:
+#   power: sensor.example_heat_pump_power
+# Omit or remove the assignment to hide the optional power display.
