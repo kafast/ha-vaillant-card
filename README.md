@@ -8,6 +8,12 @@ Steuere deine Vaillant-Heizung und dein Warmwasser direkt im Home-Assistant-Dash
 
 Die Karte erkennt passende Entitäten der [myVAILLANT-Integration](https://github.com/signalkraft/mypyllant-component) automatisch. Für den Einstieg genügt eine Zeile YAML. Weitere Custom Cards oder Themes sind nicht erforderlich.
 
+**Zu Home Assistant hinzufügen**
+
+[![Zu Home Assistant hinzufügen](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=kafast&repository=ha-vaillant-card&category=plugin)
+
+Öffnet das Repository in HACS deiner Home-Assistant-Instanz. HACS muss bereits eingerichtet sein; anschließend die Karte herunterladen.
+
 > [!NOTE]
 > Eigenständiges Community-Projekt. Nicht von Vaillant entwickelt oder unterstützt. Die Karte ist eine Dashboard-Erweiterung und ersetzt nicht die myVAILLANT-Integration.
 
