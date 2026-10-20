@@ -167,3 +167,54 @@ test('editor language changes retain private mappings and custom names',()=>{
   assert.equal(changed.language,'de');assert.equal(changed.title,'Overview');
   assert.equal(changed.entities.room,'sensor.example_room');assert.equal(changed.zone,1);
 });
+
+test('matches unprefixed HA energy names and associates the circuit from the original zone device',()=>{
+  const {resolve}=environment(),f=fixture();
+  const climate=f.registry.entities.find(e=>e.entity_id===f.ids.climate);
+  climate.original_name='Climate';climate.name='My renamed thermostat';climate.device_id='example-zone';
+  f.registry.devices.push({id:'example-zone',name:'Example Zone 1 (Circuit 0)',name_by_user:'Downstairs'});
+  for(const e of f.registry.entities)if(/Energy/.test(e.original_name))e.original_name=e.original_name.replace(/^.*?(Consumed Electrical Energy|Earned Environment Energy|Heat Generated)/,'$1');
+  f.add('sensor','opaque-device_2_0','Earned Environment Energy Heating','renamed_environment',{device_id:'example-outer'});
+  f.add('sensor','opaque-device_3_0','Heat Generated Domestic Hot Water','renamed_heat',{device_id:'example-outer'});
+  const r=resolve(f.registry,{});
+  assert.equal(r.ids.flow,f.ids.flow);assert.equal(r.selected.circuit,'0');
+  assert.equal(r.ids.electric_heating,f.ids.electric_heating);assert.equal(r.ids.electric_water,f.ids.electric_water);
+  assert.equal(r.ids.hydraulic_electric,f.ids.hydraulic_electric);
+  assert.equal(r.ids.environment_heating,'sensor.renamed_environment');assert.equal(r.ids.heat_water,'sensor.renamed_heat');
+});
+
+test('conflicting original circuit associations still require an explicit selection',()=>{
+  const {resolve}=environment(),f=fixture();
+  f.registry.devices[0].name='Example Zone (Circuit 1)';
+  assert.equal(resolve(f.registry,{}).ids.flow,null);
+  assert.equal(resolve(f.registry,{circuit:0}).ids.flow,f.ids.flow);
+});
+
+test('offline reports explain blocked controls without bypassing the command guard',async()=>{
+  const {Card}=environment(),f=fixture(),calls=[],c=new Card();c.setConfig({});
+  const states={
+    [f.ids.online]:{state:'off',attributes:{}},
+    [f.ids.climate]:{state:'auto',attributes:{supported_features:1,temperature:25,current_temperature:19.8}}
+  };
+  c.hass={connection:{},states,callWS:async({type})=>type.includes('entity_registry')?f.registry.entities:f.registry.devices,callService:async(...args)=>calls.push(args)};
+  await c._discoveryPromise;
+  assert.equal(c._canTemp(false),false);assert.match(c._home(),/Online sensor reports offline/);
+  assert.match(c._home(),/data-more="online"/);
+  assert.equal(await c._call('climate','set_temperature',{temperature:24}),false);assert.equal(calls.length,0);
+  states[f.ids.online].state='on';c.hass={...c.hass};
+  assert.equal(c._canTemp(false),true);assert.doesNotMatch(c._home(),/Online sensor reports offline/);
+});
+
+test('energy diagnostics distinguish unmapped, disabled, unavailable and unsupported readings',async()=>{
+  const {Card}=environment(),f=fixture(),c=new Card();c.setConfig({});
+  f.registry.entities.find(e=>e.entity_id===f.ids.electric_water).disabled_by='user';
+  const states={[f.ids.electric_heating]:{state:'1200',attributes:{unit_of_measurement:'Wh'}}};
+  c.hass={connection:{},states,callWS:async({type})=>type.includes('entity_registry')?f.registry.entities:f.registry.devices};await c._discoveryPromise;
+  assert.equal(c._energyValue('electric_heating'),1.2);
+  assert.equal(c._availability('electric_water'),'Disabled in Home Assistant');
+  assert.equal(c._availability('environment_water'),'Not assigned');
+  assert.equal(c._availability('hydraulic_electric'),'Unavailable');
+  assert.match(c._status(),/Energy entity diagnostics/);
+  states[f.ids.electric_heating]={state:'1200',attributes:{unit_of_measurement:'W'}};
+  assert.equal(c._energyValue('electric_heating'),null);assert.equal(c._availability('electric_heating'),'Unsupported energy unit');
+});

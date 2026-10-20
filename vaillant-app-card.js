@@ -1,4 +1,4 @@
-/* Vaillant App Card v1.4.0 — independent custom card, no external dependencies.
+/* Vaillant App Card v1.4.1 — independent custom card, no external dependencies.
  * AI-generated and AI-assisted experimental code. Tests use simulated data;
  * operation on a physical heating system has not been validated. See README. */
 (() => {
@@ -7,6 +7,22 @@
   const COLOR_SCHEMES = {vaillant:'Vaillant',home_assistant:'Home Assistant',glass:'Glass',graphite:'Graphite',ocean:'Ocean'};
   // German translations; all source messages and identifiers use English.
   const DE = {
+  "Not assigned": "Nicht zugeordnet",
+  "Disabled in Home Assistant": "In Home Assistant deaktiviert",
+  "No numeric reading": "Kein Zahlenwert",
+  "Unsupported energy unit": "Energieeinheit nicht unterstützt",
+  "Online sensor reports offline. Controls are disabled; open the sensor to check its state.": "Online-Sensor meldet offline. Steuerung gesperrt; Sensor zur Prüfung öffnen.",
+  "Control entity is not assigned.": "Steuerentität ist nicht zugeordnet.",
+  "Control entity is disabled in Home Assistant.": "Steuerentität ist in Home Assistant deaktiviert.",
+  "Control entity is unavailable.": "Steuerentität ist nicht verfügbar.",
+  "Entity does not report temperature control support.": "Entität meldet keine Unterstützung für Temperatursteuerung.",
+  "No target temperature reported.": "Keine Solltemperatur gemeldet.",
+  "Some energy readings are missing. Open System for assignment and availability details.": "Einige Energiewerte fehlen. Unter Anlage stehen Zuordnung und Verfügbarkeit.",
+  "Energy entity diagnostics": "Diagnose der Energieentitäten",
+  "Cloud connection": "Cloud-Verbindung",
+  "Connected": "Verbunden",
+  "Disconnected": "Getrennt",
+
   "System status": "Systemstatus",
   "Automatic matching failed. Retry discovery or specify entities in the local card YAML.": "Automatische Zuordnung nicht möglich. Erneut suchen oder Entitäten im lokalen Karten-YAML angeben.",
   "No myVAILLANT system found. Check the integration and its entities.": "Keine myVAILLANT-Anlage gefunden. Integration und Entitäten prüfen.",
@@ -300,7 +316,11 @@
     choices.circuit = circuits.map(value => ({value,label:`Heating circuit ${Number(value)+1}`,disabled:false}));
     const climateEntry = entries.find(e => e.entity_id === ids.climate);
     // The original integration name contains the actual associated circuit, independently of a renamed entity_id.
-    const associated = climateEntry?.original_name?.match(/\(Circuit\s+(\d+)\)/i)?.[1];
+    const zoneDevice = registry.devices.find(d => d.id === climateEntry?.device_id);
+    // HA may remove the device prefix from original_name. The integration's
+    // original device name still contains the associated circuit index.
+    const associations = [...new Set([...`${climateEntry?.original_name || ''} ${zoneDevice?.name || ''}`.matchAll(/\(Circuit\s+(\d+)\)/gi)].map(m=>m[1]))];
+    const associated = only(associations);
     const circuit = choose(choices.circuit, config.circuit ?? selected.circuit ?? associated);
     if (circuit) {
       selection.circuit=circuit.value;
@@ -310,12 +330,12 @@
       ]) match(key,dom,`${prefix}circuit_${circuit.value}_${suffix}`);
     } else if (choices.circuit.length>1) issues.push('Select the associated heating circuit; no circuit has been guessed.');
     const energyPatterns = {
-      electric_heating:/ consumed electrical energy heating$/i,
-      electric_water:/ consumed electrical energy domestic hot water$/i,
-      environment_heating:/ earned environment energy heating$/i,
-      environment_water:/ earned environment energy domestic hot water$/i,
-      heat_heating:/ heat generated heating$/i,
-      heat_water:/ heat generated domestic hot water$/i
+      electric_heating:/(?:^|\s)consumed electrical energy heating$/i,
+      electric_water:/(?:^|\s)consumed electrical energy domestic hot water$/i,
+      environment_heating:/(?:^|\s)earned environment energy heating$/i,
+      environment_water:/(?:^|\s)earned environment energy domestic hot water$/i,
+      heat_heating:/(?:^|\s)heat generated heating$/i,
+      heat_water:/(?:^|\s)heat generated domestic hot water$/i
     };
     // Energy unique IDs contain opaque indices, not the energy type. Use immutable original integration names.
     const energy = entries.filter(e => domain(e)==='sensor' && e.device_id && Object.values(energyPatterns).some(p=>p.test(e.original_name || '')));
@@ -543,7 +563,7 @@ ha-card.light[data-color-scheme="ocean"]{
     _metric(label,key,ic,digits=1){return `<button class="row" data-more="${esc(key)}">${icon(ic)}<span>${esc(label)}</span><span class="value">${this._formatSensor(key,digits)}${icon('arrow')}</span></button>`;}
     _toggle(label,key,ic){const on=this._state(key)==='on';return `<button class="quick-action ${on?'on':''}" data-toggle="${key}" aria-pressed="${on}" ${!this._ok(key)||this._busy||this._offline()?'disabled':''}>${icon(ic)}<span class="action-label">${esc(label)}</span><span class="action-state">${on?'Active':'Off'}</span></button>`;}
     _banner(){
-      if(this._state('online')==='off')return `<div class="status-line warn">${icon('info')}System is offline</div>`;
+      if(this._offline())return this._offlineNotice()+(this._state('trouble')==='on'?this._row('Fault details','trouble','info','Fault'):'');
       if(this._state('trouble')==='on')return `<button class="row" data-more="trouble">${icon('info')}<span class="warnmark">System reports a fault</span><span class="value">${icon('arrow')}</span></button>`;
       if(this._state('online')==='on'&&this._state('trouble')==='off')return `<div class="status-line">${icon('check')}No fault reported by the system</div>`;
       return `<div class="status-line neutral">${icon('info')}System status is not fully available</div>`;
@@ -557,12 +577,28 @@ ha-card.light[data-color-scheme="ocean"]{
       return `<label class="row">${icon('settings')}<span>Operating mode</span><select data-mode="${key}" aria-label="Operating mode ${water?this._t('Hot water'):this._t('Heating')}" ${disabled?'disabled':''}>${modes.includes(active)?'':`<option selected disabled value="">${esc(modeName(active))}</option>`}${modes.map(m=>`<option value="${esc(m)}" ${m===active?'selected':''}>${esc(modeName(m))}</option>`).join('')}</select></label>`;
     }
     _energyValue(key){const n=this._num(key),unit=this._attr(key,'unit_of_measurement');return n===null?null:unit==='Wh'?n/1000:unit==='kWh'?n:unit==='MWh'?n*1000:null;}
-    _energyRow(label,key,ic){const n=this._energyValue(key);return this._row(label,key,ic,n===null?this._formatSensor(key):`${this._format(n,2)} kWh`);}
+    _availability(key){
+      if(!this._ids[key])return 'Not assigned';
+      if(this._registry?.entities.find(e=>e.entity_id===this._ids[key])?.disabled_by)return 'Disabled in Home Assistant';
+      if(!this._ok(key))return 'Unavailable';
+      return this._num(key)===null?'No numeric reading':'Unsupported energy unit';
+    }
+    _energyRow(label,key,ic){const n=this._energyValue(key);return this._row(label,key,ic,n===null?this._availability(key):`${this._format(n,2)} kWh`);}
+    _temperatureReason(water){
+      const key=water?'water_heater':'climate';
+      if(!this._ids[key])return 'Control entity is not assigned.';
+      if(this._registry?.entities.find(e=>e.entity_id===this._ids[key])?.disabled_by)return 'Control entity is disabled in Home Assistant.';
+      if(!this._ok(key))return 'Control entity is unavailable.';
+      if(!(Number(this._attr(key,'supported_features'))&1))return 'Entity does not report temperature control support.';
+      if(this._target(water)===null)return 'No target temperature reported.';
+      return '';
+    }
+    _offlineNotice(){return this._offline()?`<button class="row" data-more="online">${icon('info')}<span>Online sensor reports offline. Controls are disabled; open the sensor to check its state.</span>${icon('arrow')}</button>`:'';}
     _circuitLabel(){return this._selected.circuit===undefined?'Heating circuit':`Heating circuit ${Number(this._selected.circuit)+1}`;}
     _stat(label,key,ic,digits=1) {
       return `<button class="stat" data-more="${esc(key)}"><small>${icon(ic)}${esc(label)}</small><strong>${this._formatSensor(key,digits)}</strong></button>`;
     }
-    _home(){return `<div class="overview">
+    _home(){return `${this._offlineNotice()}<div class="overview">
       <div class="control-grid">${this._controlPanel(false)}${this._controlPanel(true)}</div>
       <aside class="overview-aside">
         <section class="surface"><div class="section">Quick actions</div><div class="quick-body">${this._toggle('Hot-water boost','boost','water')}${this._toggle('Ventilation boost','ventilation','wind')}${this._toggle('Away','away','home')}</div></section>
@@ -582,7 +618,7 @@ ha-card.light[data-color-scheme="ocean"]{
         <div class="stepper"><button data-step="-1" data-control="${key}" aria-label="${esc(name)}: ${esc(this._t('Decrease target temperature'))}" data-preserve-aria ${blocked||(min!==null&&target<=min)?'disabled':''}>−</button><output aria-label="${esc(name)}: ${esc(this._t('Target temperature'))}" data-preserve-aria>${this._format(target)}<span>°C</span></output><button data-step="1" data-control="${key}" aria-label="${esc(name)}: ${esc(this._t('Increase target temperature'))}" data-preserve-aria ${blocked||(max!==null&&target>=max)?'disabled':''}>+</button></div>
         <div class="control-mode ${detail?'':'desktop-mode'}">${this._modeSelect(water)}</div>
         ${detail?'':`<button class="details-button" data-page="${water?'water':'heating'}" aria-label="${esc(name)}: ${esc(this._t('Open settings'))}" data-preserve-aria>Mode & settings${icon('arrow')}</button>`}
-        ${detail&&!this._ok(key)?'<p class="hint">Control entity is not assigned or is unavailable. Check whether it is enabled in Home Assistant.</p>':''}
+        ${this._temperatureReason(water)?`<p class="hint">${esc(this._temperatureReason(water))}</p>`:''}${detail?this._offlineNotice():''}
       </article>`;
     }
     _detail(water){return `<div class="page-heading"><button class="back" data-page="home">${icon('back')}Overview</button><small>${water?this._t('Hot water'):this._t('Heating')} settings</small></div>
@@ -591,8 +627,9 @@ ha-card.light[data-color-scheme="ocean"]{
         <section class="surface"><div class="section">${water?'Comfort':'Control'}</div>${water?`<div class="quick-body">${this._toggle('Hot-water boost','boost','water')}</div>`:this._row('Heating curve','heating_curve','settings',this._formatSensor('heating_curve',2))}${this._row('More settings',water?'water_heater':'climate','settings','Open')}</section>
         ${water?'':`<section class="surface hint-surface"><div class="section">Temperature in scheduled mode</div><p class="hint">A target change may apply as a temporary override. Check its duration in the corresponding integration setting.</p></section>`}
       </div></div>`;}
+    _energyKeys(){return ['electric_heating','electric_water','environment_heating','environment_water','heat_heating','heat_water','hydraulic_electric','hydraulic_heat'];}
     _energy(){const a=this._energyValue('electric_heating'),b=this._energyValue('electric_water');return `
-      <div class="page-heading"><h2>Energy overview</h2><small>Sensor readings</small></div>
+      <div class="page-heading"><h2>Energy overview</h2><small>Sensor readings</small></div>${this._energyKeys().some(k=>this._energyValue(k)===null)?'<button class="row" data-page="status">Some energy readings are missing. Open System for assignment and availability details.</button>':''}
       <div class="energy-summary"><section class="energy-total"><small>${icon('energy')}Electrical energy</small><strong>${this._format(a===null||b===null?null:a+b,2)}<span>kWh</span></strong><p>Heating and hot water · Energy device</p></section><section class="energy-total secondary"><small>${icon('leaf')}Energy efficiency</small><strong>${this._format(this._num('efficiency'),2)}</strong><p>Reported value for heating and hot water</p></section></div>
       <div class="energy-grid">
         <section class="surface"><div class="section">Electrical energy</div>${this._energyRow('Heating','electric_heating','heat')}${this._energyRow('Hot water','electric_water','water')}</section>
@@ -602,11 +639,11 @@ ha-card.light[data-color-scheme="ocean"]{
       </div><p class="hint">Period and freshness depend on the integration. The hydraulic station is shown separately.</p>`;}
     _status(){const required=['climate','water_heater','online','trouble','outdoor','flow','pressure'];const missing=required.filter(k=>!this._ok(k));return `
       <div class="page-heading"><h2>System & maintenance</h2><small>System overview</small></div><div class="status-grid">
-        <section class="surface"><div class="section">System status</div>${this._banner()}${this._row('Operating state','operating_state','settings')}${this._row(this._circuitLabel(),'circuit_state','heat')}</section>
+        <section class="surface"><div class="section">System status</div>${this._banner()}${this._row('Cloud connection','online','info',this._state('online')==='on'?'Connected':this._state('online')==='off'?'Disconnected':'Unavailable')}${this._row('Operating state','operating_state','settings')}${this._row(this._circuitLabel(),'circuit_state','heat')}</section>
         <section class="surface"><div class="section">System data</div>${this._metric('Water pressure','pressure','pressure')}${this._metric('Flow temperature '+this._circuitLabel(),'flow','heat')}${this._metric('Target flow temperature','flow_target','temp')}${this._metric('System flow temperature','system_flow','temp')}</section>
         <section class="surface"><div class="section">Temperatures</div>${this._metric('Room temperature','room','home')}${this._metric('Hot-water tank','tank','water')}${this._metric('Outdoor temperature','outdoor','temp')}</section>
         <section class="surface"><div class="section">Maintenance</div>${this._row('Fault details','trouble','info',this._state('trouble')==='on'?'Fault':this._state('trouble')==='off'?'None reported':'Unavailable')}${this._row('Firmware','firmware','info')}${this._row('Firmware update','firmware_update','info',this._state('firmware_update')==='on'?'Available':this._state('firmware_update')==='off'?'None reported':'Unavailable')}</section>
-      </div>${missing.length?`<div class="availability"><b>Missing or unavailable entities</b><br>${missing.map(k=>`<code>${esc(this._ids[k] || k+' (not assigned)')}</code>`).join('<br>')}<br>Enable them in entity settings if needed.</div>`:''}`;
+      </div>${this._energyKeys().some(k=>this._energyValue(k)===null)?`<section class="surface"><div class="section">Energy entity diagnostics</div>${this._energyKeys().filter(k=>this._energyValue(k)===null).map(k=>`<div class="hint"><code>${esc(k)}</code>: ${esc(this._t(this._availability(k)))}${this._ids[k]?`<br><code>${esc(this._ids[k])}</code>`:''}</div>`).join('')}</section>`:''}${missing.length?`<div class="availability"><b>Missing or unavailable entities</b><br>${missing.map(k=>`<code>${esc(this._ids[k] || k+' (not assigned)')}</code>`).join('<br>')}<br>Enable them in entity settings if needed.</div>`:''}`;
     }
     _render(){
       if(!this._config||!this._hass)return;

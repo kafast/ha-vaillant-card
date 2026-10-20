@@ -89,7 +89,7 @@ HACS normally manages the resource automatically. If missing under **Settings �
 
 1. Download [`vaillant-app-card.js`](https://raw.githubusercontent.com/kafast/ha-vaillant-card/main/vaillant-app-card.js).
 2. Copy it to `/config/www/vaillant-app-card.js`; create `www` if needed.
-3. Under **Settings → Dashboards → Resources**, add `/local/vaillant-app-card.js?v=1.4.0` as a **JavaScript module**.
+3. Under **Settings → Dashboards → Resources**, add `/local/vaillant-app-card.js?v=1.4.1` as a **JavaScript module**.
 4. Reload the frontend.
 
 Enable advanced mode in your user profile if Resources is hidden. A newly created `www` directory may require an HA restart before its files become accessible.
@@ -102,7 +102,7 @@ Add to the existing resource configuration:
 ```yaml
 lovelace:
   resources:
-    - url: /local/vaillant-app-card.js?v=1.4.0
+    - url: /local/vaillant-app-card.js?v=1.4.1
       type: module
 ```
 
@@ -315,6 +315,7 @@ A successfully sent command does not confirm that the equipment applied it. The 
 
 **Manual:** Replace the JavaScript file and change the resource URL's version parameter to invalidate the browser cache.
 
+- **1.4.1:** Match energy names without HA device prefixes and recover circuit association from original device names. Show offline control-block reasons and energy assignment/availability diagnostics.
 - **1.4.0:** English source messages; English/German UI, editor language selection and bilingual documentation. Prominent AI-generation and test-limit notices.
 - **1.3.1:** Home Assistant is the default scheme, including in the editor. Set `color_scheme: vaillant` for the earlier appearance.
 - **1.3.0:** Five color schemes, theme colors, glass appearance and visual editor.
@@ -329,6 +330,7 @@ A successfully sent command does not confirm that the equipment applied it. The 
 | No system found | Check that the myVAILLANT integration is loaded and uses `mypyllant`; select a system if prompted. |
 | Automatic matching fails | Retry discovery. If the session cannot read the registry, use local `entities` assignments. |
 | Missing values / “—” | Filter **Settings → Devices & services → Entities** for myVAILLANT, show disabled entities and enable those required. |
+| Online sensor reports offline | The card blocks commands when the mapped online sensor is `off`. Open that sensor to inspect its raw state; other readings can still be present. Check the integration and compare control through HA's native entity dialog. |
 | Disabled temperature buttons | Check control entity availability, temperature support, limits, pending commands and offline state. |
 | Old UI after updating | Redownload in HACS, reload the frontend, check cache and remove duplicate resources. |
 | Missing or stale energy data | Check energy entities directly in HA and select the energy device if prompted. Periods and refresh rates depend on the integration. |

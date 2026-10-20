@@ -118,7 +118,7 @@ HACS verwaltet die JavaScript-Ressource normalerweise selbst. Fehlt sie unter **
 
    | Feld | Wert |
    | --- | --- |
-   | URL | `/local/vaillant-app-card.js?v=1.4.0` |
+   | URL | `/local/vaillant-app-card.js?v=1.4.1` |
    | Ressourcentyp | JavaScript-Modul |
 
 4. Das Frontend neu laden.
@@ -133,7 +133,7 @@ In die vorhandene Ressourcenliste eintragen:
 ```yaml
 lovelace:
   resources:
-    - url: /local/vaillant-app-card.js?v=1.4.0
+    - url: /local/vaillant-app-card.js?v=1.4.1
       type: module
 ```
 
@@ -367,6 +367,8 @@ Ein erfolgreich gesendeter Befehl bestätigt noch nicht die Änderung an der Anl
 
 **Manuell:** Die JavaScript-Datei ersetzen und den Versionsparameter der Ressourcen-URL anpassen, damit der Browser die neue Datei lädt.
 
+**Neu in 1.4.1:** Energiezuordnung auch ohne HA-Gerätepräfix, Heizkreiszuordnung aus dem ursprünglichen Gerätenamen sowie sichtbare Offline-Sperrgründe und Diagnose für fehlende Energieentitäten.
+
 **Neu in 1.4.0:** Englische Quelltexte, deutsche und englische Oberfläche, Sprachauswahl im Editor und zweisprachige Dokumentation. Hinweise zur KI-Erstellung und zu Testgrenzen sind oben hervorgehoben.
 
 **Neu in 1.3.1:** Home Assistant ist der Standardfarbstil. Das gilt auch im visuellen Editor. Für die bisherige Farbgebung ausdrücklich `color_scheme: vaillant` setzen.
@@ -385,6 +387,7 @@ Ein erfolgreich gesendeter Befehl bestätigt noch nicht die Änderung an der Anl
 | Keine Anlage gefunden | myVAILLANT-Integration eingerichtet und geladen? Plattform `mypyllant`? Bei mehreren Anlagen die Auswahl in der Karte beachten. |
 | Automatische Zuordnung nicht möglich | **Entitäten neu suchen** verwenden. Kann die Sitzung die Registrierung nicht lesen, lokale Zuordnungen unter `entities` angeben. |
 | Werte fehlen oder stehen auf „—“ | Unter **Einstellungen → Geräte & Dienste → Entitäten** nach myVAILLANT filtern, deaktivierte Entitäten einblenden und benötigte aktivieren. |
+| Online-Sensor meldet offline | Bei `off` sperrt die Karte Steuerbefehle. Den Sensor öffnen und den Rohzustand prüfen; andere Messwerte können trotzdem vorhanden sein. Integration prüfen und Steuerung über den normalen HA-Entitätsdialog vergleichen. |
 | Plus/Minus ausgegraut | Steuerentität aktiv und verfügbar? Unterstützt sie die Temperatursteuerung? Ist bereits der minimale/maximale Sollwert erreicht? Meldet die Anlage sich offline? |
 | Alte Oberfläche nach einem Update | In HACS erneut herunterladen, Frontend neu laden und Browsercache prüfen. Doppelte Ressourcen entfernen. |
 | Energieanzeige fehlt oder ist veraltet | Energieentitäten und deren Zustand direkt in HA prüfen. Mehrere Energiegeräte gegebenenfalls auswählen. Zeitraum und Aktualisierung hängen von der Integration ab. |
